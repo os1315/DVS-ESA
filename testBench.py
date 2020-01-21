@@ -26,7 +26,6 @@ import importlib
 import os
 
 # This is the actualy file being tested
-# from event_creation_TB import runMe
 import event_creation
 import playProcessedModule
 
@@ -83,6 +82,7 @@ class TestBench:
 
             elif (os.path.isdir("frames/" + testName + "/" + "raw_dim/") and os.path.isdir("frames/" + testName + "/" + "raw_bright/")):
                 print("Constructing from multiple images")
+                importlib.reload(event_creation)
                 self.raw_images = event_creation.convertFromCompound(testName, self.x_size, self.y_size, self.frames)
 
         # Mark that these are new and not processed
@@ -91,7 +91,7 @@ class TestBench:
     def __del__(self):
         print("Images cleared from memory.")
 
-    def testImport(self, frame_cap = None):
+    def processImages(self, frame_cap = None):
         if frame_cap is None:
             self.processedFrames = self.frames
         elif (frame_cap > self.frames):
@@ -101,7 +101,7 @@ class TestBench:
 
         try:
             importlib.reload(event_creation)
-            self.prc_images = event_creation.runMe(self.raw_images, self.x_size, self.y_size, self.processedFrames)
+            self.prc_images = event_creation.createEvents(self.raw_images, self.x_size, self.y_size, self.processedFrames)
             self.isProcessed = True
         except Exception as e:
             print("\nIMPORT FAILED! -> Processing")
@@ -121,18 +121,6 @@ class TestBench:
         else:
             print("\nData was not processed")
 
-    def playImport(self, frame_cap = None):
-        try:
-            self.testImport(frame_cap)
-        except Exception as e:
-            print("\nIMPORT FAILED! -> Processing")
-            print(str(e) + '\n')
-        try:
-            self.playProcessed()
-        except Exception as e:
-            print("\nIMPORT FAILED! -> Visualising")
-            print(str(e) + '\n')
-
     def playRaw(self):
         # PRESENT THE IMAGES
         print(self.raw_images)
@@ -142,44 +130,15 @@ class TestBench:
         im_ani = animation.FuncAnimation(fig1,lambda j: im.set_array(self.raw_images[:,:,j]),frames=range(self.frames),interval=100, repeat_delay=3000)
         plt.show()
 
-TB = TestBench("test11")
 
-run_module = True
-
-while (run_module == True):
-
-    print("\nNext command?\n\tr - reload images \n\ti - process images \n\tv - view processed images \n\tp - process&play \n\tn - exit")
-
-    echo = input("Input:   ")
-
-    if (echo == 'R' or echo == 'r'):
-        del TB
-        echo = input("Image name: ")
-        TB = TestBench(echo)
-
-    elif (echo == 'I' or echo == 'i'):
-        cap = input('Cap frames?    ')
-        if (cap == 'n' or cap == 'N'):
-            pass
-        elif (cap == ''):
-            TB.testImport()
-        else:
-            TB.testImport(int(cap))
-
-    elif (echo == 'V' or echo == 'v'):
-        TB.playProcessed()
-
-    elif (echo == 'P' or echo == 'p'):
-        cap = input('Cap frames?    ')
-        if (cap == 'n' or cap == 'N'):
-            pass
-        elif (cap == ''):
-            TB.playImport()
-        else:
-            TB.playImport(int(cap))
-
-    elif (echo == 'N' or echo == 'n'):
-        run_module = False
-
-    elif (echo == 'T' or echo == 't'):
-        TB.playRaw()
+    def playImport(self, frame_cap = None):
+        try:
+            self.processImages()
+        except Exception as e:
+            print("\nIMPORT FAILED! -> Processing")
+            print(str(e) + '\n')
+        try:
+            self.playProcessed()
+        except Exception as e:
+            print("\nIMPORT FAILED! -> Visualising")
+            print(str(e) + '\n')

@@ -31,7 +31,9 @@ def animateTwo(j,eve_images,raw_images, im):
 
     return new_im
 
-def animateMore(j,eve_images,raw_images, im,extra_images=None):
+def animateMore(j, fig, eve_images,raw_images, im,extra_images=None):
+
+    fig.suptitle("Frame: " + str(j+1))
 
     new_im = []
     new_im.append(im[0].set_array(eve_images[:,:,j]))
@@ -126,6 +128,7 @@ def displayThree(prc_images, frame_count):
 
     # Initialize plot and image artist list
     fig1, axes = plt.subplots(1,3)
+    fig1.suptitle("Frame: 1")
     event_ax = axes[0]
     raw_ax = axes[1]
 
@@ -138,6 +141,7 @@ def displayThree(prc_images, frame_count):
 
     #  First subplot
     im.append(event_ax.imshow(eve_images[:,:,0],vmin=0,vmax=1, cmap=cm))
+    event_ax.title.set_text('Event data')
     legend_elements = [Line2D([0],[0],marker='o',color='w',label='ON event',markerfacecolor='r',markersize=5), Line2D([0],[0],marker='o',color='w',label='OFF event',markerfacecolor='b',markersize=5)]
     event_ax.legend(bbox_to_anchor=(0., 1.02, 1., .102),handles=legend_elements, loc = 'upper center', ncol=2)
 
@@ -145,15 +149,18 @@ def displayThree(prc_images, frame_count):
     # Second subplot
     im.append(raw_ax.imshow(raw_images[:,:,0],vmin=0,vmax=1, cmap='gray'))
     divider = make_axes_locatable(raw_ax)
+    raw_ax.title.set_text('Raw data')
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig1.colorbar(im[1], cax=cax, orientation='vertical')
 
     im.append(axes[2].imshow(extra_images[:,:,0,0],vmin=0,vmax=-8))
     divider = make_axes_locatable(axes[2])
+    axes[2].title.set_text('Log10 of raw data')     # Ok, this is not a good move if I ever want to automatically slace for more plots
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig1.colorbar(im[2], cax=cax, orientation='vertical')
 
     #  Colorbar
-    im_ani = animation.FuncAnimation(fig1,lambda j: animateMore(j,eve_images,raw_images,im,extra_images), frames=range(frame_count),interval=100, repeat_delay=3000)
+    im_ani = animation.FuncAnimation(fig1,lambda j: animateMore(j,fig1,eve_images,raw_images,im,extra_images), frames=range(frame_count),interval=100, repeat_delay=3000)
 
+    # For some reason you need the "5" otherwise it'll present you multiple windows. Just some matplotlib thing I don't get...
     plt.show(5)

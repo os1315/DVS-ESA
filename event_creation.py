@@ -21,7 +21,7 @@ import matplotlib.animation as animation
 
 import struct
 
-def runMe(raw_images,x_size,y_size,frames_count):
+def createEvents(raw_images,x_size,y_size,frames_count):
 
     # Camera params
     theta = 0.2
@@ -30,10 +30,10 @@ def runMe(raw_images,x_size,y_size,frames_count):
     # Arificially add dark current
     all_images = raw_images
 
-    # New expaded matrix just for visualisation
+    # 4D matrix containining raw and processed data at all times
     image_out = np.ones((x_size,y_size,frames_count,plot_count), dtype='float32') * 0.5
 
-    # image_out[0:x_size,:,:] = all_images
+    # zeroth index on 4th dimension is always reserved for raw data
     image_out[:,:,:,0] = all_images[:,:,:frames_count]
 
     # DATA TRANSFORM
@@ -101,6 +101,8 @@ def runMe(raw_images,x_size,y_size,frames_count):
     print("Frame: ",n+1,'/',frames_count)
 
     return image_out
+
+# ______________________________________________________________________________
 
 def convertFromSingle(testName,x_size,y_size,frames):
 
