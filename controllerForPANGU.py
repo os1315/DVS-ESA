@@ -1,4 +1,5 @@
 import subprocess
+import os
 
 # Use to format log file string
 def strName(vector, counter):
@@ -13,6 +14,9 @@ def strName(vector, counter):
 #  Location of shell shell script
 bashCommand = "./shell/compound.sh"
 
+#  Name of test
+testName = "testLogged"
+
 
 # Container for all tests
 testVector = []
@@ -22,45 +26,20 @@ testVector = []
 # test_dim = [EXp2,     QE2,   BIAS2, GAIN2,   RMS2,    DC2]
 
 test_bri = [" 1.000", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
-testVector.append(test_bri + test_dim)
-
-test_bri = [" 1.000", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.0015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
-testVector.append(test_bri + test_dim)
-
-test_bri = [" 1.000", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.00015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
-testVector.append(test_bri + test_dim)
-
-test_bri = [" 1.000", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.000015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
-testVector.append(test_bri + test_dim)
-
-test_bri = [" 1.000", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
-testVector.append(test_bri + test_dim)
-
-test_bri = [" 15", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
-testVector.append(test_bri + test_dim)
-
-test_bri = [" 1.5", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.0015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
-testVector.append(test_bri + test_dim)
-
-test_bri = [" 0.15", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.00015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
+test_dim = [" 0.0015", " 0.09", " 0", " 1" , " 0.055", " 24.966"]
 testVector.append(test_bri + test_dim)
 
 # Keep track of number of performed tests
 counter = 1
+while(os.path.isdir("frames/" + testName + str(counter))):
+    counter = counter + 1
+    print("frames/" + testName + str(counter))
 
 for x in testVector:
     echo = strName(x,counter)
     print(echo)
 
-    test = "testLogged" + str(counter)
+    test = testName + str(counter)
 
     try:
         process = subprocess.run(['bash', bashCommand, test, x])

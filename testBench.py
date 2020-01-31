@@ -21,9 +21,11 @@ import matplotlib.animation as animation
 
 # Other imports
 import struct
+import parse
 import time
 import importlib
 import os
+import traceback
 
 # This is the actualy file being tested
 import event_creation
@@ -33,6 +35,9 @@ import playProcessedModule
 class TestBench:
 
     def __init__(self, testName):
+
+        self.testName = testName
+
     # READ IN ALL IMAGES
     # Try is file images had already been opened:
         try:
@@ -73,8 +78,7 @@ class TestBench:
             self.raw_B = np.zeros((self.x_size,self.y_size,self.frames), dtype='float32')
             self.raw_images = np.zeros((self.x_size,self.y_size,self.frames), dtype='float32')
 
-
-
+            # Verify is it's single picture or compound
             if os.path.isdir("frames/" + testName + "/" + "raw/"):
                 print("Constructing from single image")
                 importlib.reload(event_creation)
@@ -99,13 +103,23 @@ class TestBench:
         else:
             self.processedFrames = frame_cap
 
+
         try:
             importlib.reload(event_creation)
-            self.prc_images = event_creation.createEvents(self.raw_images, self.x_size, self.y_size, self.processedFrames)
+            self.prc_images, EVENT_LIST = event_creation.createEvents(self.raw_images, self.x_size, self.y_size, self.processedFrames)
             self.isProcessed = True
         except Exception as e:
             print("\nIMPORT FAILED! -> Processing")
-            print(str(e) + '\n')
+            print(traceback.format_exc() + '\n')
+
+        try:
+            EVENT_FILE = open("frames/" + self.testName + "/eventlist.txt", 'w')
+            for event in EVENT_LIST:
+                EVENT_FILE.write("x: " + str(event[0]) + "; y: " + str(event[1]) + "; t: " + str(event[2]) + "; p: " + str(event[3]) + "\n" )
+            EVENT_FILE.close()
+        except Exception as e:
+            print("\nIMPORT FAILED! -> Processing -> Saving event list")
+            print(traceback.format_exc() + '\n')
 
 
     def playProcessed(self):
@@ -116,7 +130,7 @@ class TestBench:
                 playProcessedModule.playProcessed(self.prc_images, self.processedFrames)
             except Exception as e:
                 print("\nIMPORT FAILED! -> Visualising")
-                print(str(e) + '\n')
+                print(traceback.format_exc() + '\n')
 
         else:
             print("\nData was not processed")
@@ -133,12 +147,12 @@ class TestBench:
 
     def playImport(self, frame_cap = None):
         try:
-            self.processImages()
+            self.processImages(frame_cap)
         except Exception as e:
-            print("\nIMPORT FAILED! -> Processing")
-            print(str(e) + '\n')
+            print("\n\nIMPORT FAILED! -> Processing\n")
+            print(traceback.format_exc() + '\n')
         try:
             self.playProcessed()
         except Exception as e:
-            print("\nIMPORT FAILED! -> Visualising")
-            print(str(e) + '\n')
+            print("\n\nIMPORT FAILED! -> Visualising\n")
+            print(traceback.format_exc() + '\n')

@@ -21,6 +21,7 @@ import matplotlib.animation as animation
 
 # Other imports
 import struct
+import parse
 import time
 import importlib
 import os
@@ -31,7 +32,7 @@ import playProcessedModule
 
 from testBench import TestBench
 
-TB = TestBench("testLogged5")
+TB = TestBench("testLogged1")
 
 run_module = True
 
