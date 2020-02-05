@@ -19,6 +19,7 @@ import struct
 import parse
 import time as tm
 import os
+import traceback
 
 # This is the actualy file being tested
 import event_creation
@@ -27,10 +28,17 @@ x_size = 128
 y_size = 128
 frames = 60
 
+j = 51
+k = 88
 
+# Tested file
+file = "testLogged1"
+
+# Initialize array for raw images
 raw_images = np.zeros((x_size,y_size,frames), dtype='float32')
 
-log_file = open("frames/testLogged1/" + "log.txt" , "r")
+# Read gains from log file, we need this to reconstruct the images
+log_file = open("frames/" + file + "/log.txt" , "r")
 log_string = log_file.read()
 
 GAIN1 = parse.search("GAIN1: {:d};", log_string)[0]
@@ -38,36 +46,38 @@ GAIN2 = parse.search("GAIN2: {:d};", log_string)[0]
 
 log_file.close()
 
+# Reconstruct images
 raw_images = event_creation.convertFromCompound("testLogged1",x_size,y_size,frames)
-testVector = np.log10(raw_images[70,14,10:30])
+testVector = np.log10(raw_images[j,k,:])
 
-# Method 2
-
+# Track conversion execution time
 start_time = tm.time()
 
+# Camera / simulation parameters
 theta = 0.2
 T = 50
 latency = 15
 refract_period = 0
 time = 0
 
+# Pixel states
 quick_burst = 0
 current_states = testVector[0]
 EVENT_LIST = []
 
-
 threshold_p = current_states + theta   # Constant threshold
 threshold_n = current_states - theta   # Constant threshold
 
+# Iterate through frames
 for n in range(1,testVector.shape[0]):
 
     delta = testVector[n] - testVector[n-1]
-    # threshold = current_states * theta        # Dynamic threshold
 
     # Slope used for piecewise linear interpolation of pixel intensity
     slope = (testVector[n] - testVector[n-1])/T
     print('\ntime: {} \ncurrent {:01.4f} illum: {:01.4f}'.format(time, current_states,testVector[n]))
 
+    # Determine if quick burst
     if quick_burst > 0 :
         event_time = refract_period
         # Update pixel state and set new end for refractory period
@@ -83,14 +93,12 @@ for n in range(1,testVector.shape[0]):
             print("\nQuick Burst: -1")
         quick_burst = 0
 
-    # Keeps looking for events until pixel refrect period extends into next frame
+    # Keeps looking for events until pixel refract_period extends into next frame
     while(refract_period < (time+T)):
         # Case for increasing brightness
         print("ref_perdiod: ", refract_period)
         if threshold_p < testVector[n] and slope > 0 :
 
-            # Dummy value event visualisation, might delete later
-            # image_out[x,y,n,1] = 1.0
             # Linear estimate of threshold crossing instance
             dt = abs((current_states + theta  - testVector[n-1])/slope)
             print('\ndt: {} theta: {} slope: {}'.format(dt,theta,slope))
@@ -158,9 +166,9 @@ for n in range(1,testVector.shape[0]):
     print("_________\n")
 
     if quick_burst >= 0:
-        if ((refract_period > (time+T)) and (threshold_p < testVector[n])) :
+        if ((refract_period >= (time+T)) and (threshold_p < testVector[n])) :
             quick_burst = 1
-        elif ((refract_period > (time+T)) and (threshold_n > testVector[n])) :
+        elif ((refract_period >= (time+T)) and (threshold_n > testVector[n])) :
             quick_burst = 2
 
     # Update time
@@ -169,7 +177,7 @@ for n in range(1,testVector.shape[0]):
 print('\n\nMetod 2 runtine: {:5.0f} [ms]\n\n'.format(1000*(tm.time() - start_time)))
 
 if len(EVENT_LIST) == 0:
-    print("no events\n\n")
+    print("no events found\n\n")
 else:
 
     eventList = np.ones([len(EVENT_LIST),3])
@@ -178,7 +186,7 @@ else:
         eventList[n,0] = EVENT_LIST[n][0]   # Event Time
         eventList[n,1] = EVENT_LIST[n][1]   # Polarity
         eventList[n,2] = EVENT_LIST[n][2]   # Differentiator
-        print('{:4.1f} {:4.1f} {:1.3f}'.format(eventList[n,0] + 1029,eventList[n,1],eventList[n,2]))
+        print('{:4.1f} {:4.1f} {:1.3f}'.format(eventList[n,0],eventList[n,1],eventList[n,2]))
 
         eventInt = eventList
         eventInt[0,1] = testVector[0] + eventList[0,1]*theta
@@ -188,23 +196,68 @@ else:
         eventInt[n,1] = eventInt[n-1,1] + eventList[n,1]*theta
 
 
+##########################################################
+################## Event list reading ####################
+##########################################################
+try:
+    file_location = "frames/" + file + "/eventlist.txt"
 
-    fig, ax = plt.subplots()
+    EVENT_FILE = open(file_location, 'r')
 
-    # ax[1].scatter(range(current_states.shape[0]),testVector - current_states)
+    # Extract meta data about file (for now only period)
+    T = parse.search("T: {:d};", EVENT_FILE.readline())[0]
 
-    line1 = ax.scatter(np.linspace(0,T*(testVector.shape[0]-1),testVector.shape[0]),testVector, color='r')
-    line1.set_label('Illumination')
+    time = 0
+    events_from_list_t = []
+    events_from_list_p = []
 
-    line1 = ax.scatter(eventInt[:,0], eventInt[:,1])
-    line1.set_label("Integrated events")
+    # This will scan entire file
+    for event in EVENT_FILE:
+
+        x, y, t, p = parse.search("x: {:d}; y: {:d}; t: {:d}; p: {:d}",event)
+
+        # NOTE: The loop below only works because the event_list is already sorted chronologically by frames.
+
+        # If still within this period then stack events...
+        if x==j and y==k:
+            events_from_list_t.append([t])
+            events_from_list_p.append([p])
+        # ...else rescale frame to [0:1], push to list, update timer and reset.
+
+    EVENT_FILE.close()
+    plot_from_list = 1
+
+except Exception as e:
+    print("Reading event list failed")
+    print(traceback.format_exec() + '\n')
+    plot_from_list = 0
 
 
-    # ax3 = plt.subplot(212,sharex=ax1, sharey=ax1)
-    line3 = ax.scatter(eventInt[:,0], eventInt[:,2])
-    line3.set_label("Differentiator state")
-    ax.grid(True)
+##########################################################
+######################## Plotting ########################
+##########################################################
 
-    ax.legend()
+fig, ax = plt.subplots()
 
-    plt.show()
+# ax[1].scatter(range(current_states.shape[0]),testVector - current_states)
+
+line1 = ax.scatter(np.linspace(0,T*(testVector.shape[0]-1),testVector.shape[0]),testVector, color='r')
+line1.set_label('Illumination')
+
+line1 = ax.scatter(eventInt[:,0], eventInt[:,1], color='b')
+line1.set_label("Integrated events")
+
+line3 = ax.scatter(eventInt[:,0], eventInt[:,2], color='orange')
+line3.set_label("Differentiator state")
+
+if plot_from_list == 1:
+
+    myline = np.mean(testVector)
+
+    line4 = ax.scatter(events_from_list_t, myline + events_from_list_p, color='g')
+    line4.set_label("Events from list")
+
+ax.grid(True)
+ax.legend()
+
+plt.show()

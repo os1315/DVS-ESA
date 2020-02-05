@@ -21,9 +21,14 @@ import matplotlib.animation as animation
 
 import struct
 import parse
+import importlib
 
-# My imports
+# My imports (have to be reloded for top level reloadto take effect)
 # import singlePixelTransform
+import convInterpolate as CI
+importlib.reload(CI)
+
+
 
 def plotEvents(EVENT_LIST, theta, T, all_images_log, j, k):
 
@@ -56,6 +61,7 @@ def createEvents(raw_images,x_size,y_size,frames_count):
 
     # List of events
     EVENT_LIST = []
+    PARTIAL_LIST = []
     j = 70
     k = 14
 
@@ -99,6 +105,7 @@ def createEvents(raw_images,x_size,y_size,frames_count):
         delta = all_images_log[:,:,n] - all_images_log[:,:,n-1]
         # threshold = current_states * theta        # Dynamic threshold
 
+
         for x in range(x_size):     # Iterate over x dimension
             for y in range(y_size): # Iterate over y dimension
 
@@ -115,11 +122,9 @@ def createEvents(raw_images,x_size,y_size,frames_count):
                     threshold_n[x,y] = current_states[x,y] - theta
 
                     if quick_burst[x,y] == 1 :
-                        if x == j and y == k:
-                            EVENT_LIST.append([x,y,event_time,current_states[x,y]])
+                            PARTIAL_LIST.append([x,y,event_time,-1])
                     if quick_burst[x,y] == 2 :
-                        if x == j and y == k:
-                            EVENT_LIST.append([x,y,event_time,current_states[x,y]])
+                            PARTIAL_LIST.append([x,y,event_time,1])
                     quick_burst[x,y] = 0
 
                 # Keeps looking for events until pixel refrect period extends into next frame
@@ -146,7 +151,7 @@ def createEvents(raw_images,x_size,y_size,frames_count):
                             refract_period[x,y] = event_time + latency
 
                         # Append event to event list and update thresholds
-                        EVENT_LIST.append([x,y,event_time,1])
+                        PARTIAL_LIST.append([x,y,event_time,1])
                         threshold_p[x,y] = current_states[x,y] + theta
                         threshold_n[x,y] = current_states[x,y] - theta
 
@@ -170,7 +175,7 @@ def createEvents(raw_images,x_size,y_size,frames_count):
                             refract_period[x,y] = event_time + latency
 
 
-                        EVENT_LIST.append([x,y, event_time,-1])
+                        PARTIAL_LIST.append([x,y, event_time,-1])
                         threshold_p[x,y] = current_states[x,y] + theta
                         threshold_n[x,y] = current_states[x,y] - theta
 
@@ -178,13 +183,19 @@ def createEvents(raw_images,x_size,y_size,frames_count):
                         break
 
                 # track if pixel should fire immidiately at the end of refractory period
-                if ((refract_period[x,y] > (time+T)) and (threshold_p[x,y] < all_images_log[x,y,n])) :
+                if ((refract_period[x,y] >= (time+T)) and (threshold_p[x,y] < all_images_log[x,y,n])) :
                     quick_burst[x,y] = 1
-                elif ((refract_period[x,y] > (time+T)) and (threshold_n[x,y] > all_images_log[x,y,n])) :
+                elif ((refract_period[x,y] >= (time+T)) and (threshold_n[x,y] > all_images_log[x,y,n])) :
                     quick_burst[x,y] = 2
 
         # Update time
         time = time + T
+
+        # Sort the generated events and append to returned list
+        if len(PARTIAL_LIST) > 0:
+            PARTIAL_LIST.sort(key=lambda x: x[2])
+            EVENT_LIST = EVENT_LIST + PARTIAL_LIST
+            PARTIAL_LIST = []
 
         image_out[:,:,n,2] = current_states
 
@@ -217,12 +228,29 @@ def createEvents(raw_images,x_size,y_size,frames_count):
     # image_out[:,:,n,2] = all_images_log
         # image_out[:,:,n,3] = threshold
     #
-    for n in range(1,frames_count):
-        # image_out[:,:,n,2] = current_states
-        image_out[:,:,n,3] = all_images_log[:,:,n]
-        print("Frame: ",n+1,'/',frames_count, end='\r')
 
-    print("Frame: ",n+1,'/',frames_count)
+
+    # for n in range(1,frames_count):
+    #     # image_out[:,:,n,2] = current_states
+    #     image_out[:,:,n,3] = all_images_log[:,:,n]
+    #     print("Frame: ",n+1,'/',frames_count, end='\r')
+    #
+    # print("Frame: ",n+1,'/',frames_count)
+
+    print("\n\nEvaluating plot 1:")
+
+    initial_image = all_images[:,:,0]
+
+    converter = CI.convInterpolate(x_size, y_size, theta, T, latency,initial_image)
+
+    EVENT_LIST = []
+
+    for n in range(1,frames_count):
+        print(" Frame: ",n+1,'/',frames_count, end='\r')
+        PARTIAL_LIST, image_out[:,:,n,3] = converter.update(all_images[:,:,n])
+        EVENT_LIST = EVENT_LIST + PARTIAL_LIST
+
+    print(" ")
 
     return image_out, EVENT_LIST
 

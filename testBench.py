@@ -114,8 +114,9 @@ class TestBench:
 
         try:
             EVENT_FILE = open("frames/" + self.testName + "/eventlist.txt", 'w')
+            EVENT_FILE.write("T: " + str(50) + ";\n")
             for event in EVENT_LIST:
-                EVENT_FILE.write("x: " + str(event[0]) + "; y: " + str(event[1]) + "; t: " + str(event[2]) + "; p: " + str(event[3]) + "\n" )
+                EVENT_FILE.write("x: " + str(event[0]) + "; y: " + str(event[1]) + "; t: " + "{:.0f}".format(event[2]) + "; p: " + str(event[3]) + "\n" )
             EVENT_FILE.close()
         except Exception as e:
             print("\nIMPORT FAILED! -> Processing -> Saving event list")

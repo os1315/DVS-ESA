@@ -23,6 +23,7 @@ from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # Replace this with a lambda later
+
 def animateTwo(j,eve_images,raw_images, im):
 
     new_im = []
@@ -33,16 +34,12 @@ def animateTwo(j,eve_images,raw_images, im):
 
 def animateMore(j, fig, eve_images,raw_images, im,extra_images):
 
-    fig.suptitle("Frame: " + str(j+1))
-
     new_im = []
     new_im.append(im[0].set_array(eve_images[:,:,j]))
     new_im.append(im[1].set_array(raw_images[:,:,j]))
     new_im.append(im[2].set_array(extra_images[:,:,j,1]))
     new_im.append(im[3].set_array(extra_images[:,:,j,0]))
 
-
-    # for m in range(extra_images.shape[3]):
     return new_im
 
 def playProcessed(prc_images, frame_count):
@@ -61,6 +58,36 @@ def playProcessed(prc_images, frame_count):
     elif (plot_count == 6):
         displaySix(prc_images, frame_count)
 
+#  This is fucking shit and I'm sick and tired of it
+def displaySingle(eve_images):
+
+    # Create color map
+    colors = [(0, 0, 1), (1, 1, 1), (1, 0, 0)]  # R -> G -> B
+    n_bins = [0.25, 0.75]  # Discretizes the interpolation into bins
+    cmap_name = 'my_list'
+    cm = LinearSegmentedColormap.from_list(cmap_name, colors, N=3)
+
+    ims = []
+
+    for im in eve_images:
+        # ims.append([plt.imshow(im, animated = True)])
+        image = plt.imshow(im, animated = True,vmin=0,vmax=1, cmap=cm)
+        ims.append([image])
+
+    print(len(ims))
+
+    # Initialize plot and image artist list
+    fig1= plt.figure()
+
+    #  First subplot
+    # event_ax.imshow(eve_images[:,:,0],vmin=0,vmax=1, cmap=cm)
+    # legend_elements = [Line2D([0],[0],marker='o',color='w',label='ON event',markerfacecolor='r',markersize=5), Line2D([0],[0],marker='o',color='w',label='OFF event',markerfacecolor='b',markersize=5)]
+    # event_ax.legend(bbox_to_anchor=(0., 1.02, 1., .102),handles=legend_elements, loc = 'upper center', ncol=2)
+
+    #  Colorbar
+    im_ani = animation.FuncAnimation(fig1,ims,interval=500, blit=True,repeat_delay=1)
+
+    plt.show()
 
 def displayTwo(prc_images, frame_count):
 
@@ -205,7 +232,7 @@ def displayFour(prc_images, frame_count):
     fig1.colorbar(im[1], cax=cax, orientation='vertical')
 
     # Third subplot
-    im.append(axes[0,1].imshow(extra_images[:,:,0,0],vmin=0,vmax=-8))
+    im.append(axes[0,1].imshow(extra_images[:,:,0,0],vmin=0,vmax=1, cmap=cm))
     divider = make_axes_locatable(axes[0,1])
     axes[0,1].title.set_text('Log10 of raw data')     # Ok, this is not a good move if I ever want to automatically slace for more plots
     cax = divider.append_axes('right', size='5%', pad=0.05)
