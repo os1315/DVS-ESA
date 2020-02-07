@@ -58,7 +58,6 @@ def plotEvents(EVENT_LIST, theta, T, all_images_log, j, k):
 
 def createEvents(raw_images,x_size,y_size,frames_count):
 
-
     # List of events
     EVENT_LIST = []
     PARTIAL_LIST = []
@@ -66,7 +65,7 @@ def createEvents(raw_images,x_size,y_size,frames_count):
     k = 14
 
     # Camera params
-    theta = 0.2
+    theta = 0.4
     plot_count = 4
     T = 50          # Sampling period in us (1/frame rate)
     latency = 15    # Length of a pixels refractory period in us
@@ -74,130 +73,24 @@ def createEvents(raw_images,x_size,y_size,frames_count):
     # Arificially add dark current
     all_images = raw_images
 
-    # 4D matrix containining raw and processed data at all times
-    image_out = np.ones((x_size,y_size,frames_count,plot_count), dtype='float32') * 0.5
-
-    # zeroth index on 4th dimension is always reserved for raw data
+    image_out = np.ones([x_size,y_size,frames_count,plot_count])
     image_out[:,:,:,0] = all_images[:,:,:frames_count]
+    image_out[:,:,:,2] = np.log10(all_images[:,:,:frames_count])
 
-    # DATA TRANSFORM
-    all_images_log = np.log10(all_images)                   # Create matrix of logged values
-    current_states = all_images_log[:,:,0]                  # Stores the values that pixel differentiators are zeroed at
-    refract_period = np.zeros((x_size,y_size), dtype='float32')   # Stores ENDS of refractive periods for the pixels
-    time = 0        # Time at which frame was recorded
-    quick_burst = np.zeros((x_size,y_size))
+    print("\n\nEvaluating plot 1:")
 
-    # quick_burst = 0   ->  no burst
-    # quick_burst = 1   ->  positive
-    # quick_burst = -1  ->  negative
+    initial_image = all_images[:,:,0]
 
-    threshold_p = current_states + theta   # Constant threshold
-    threshold_n = current_states - theta   # Constant threshold
+    converter = CI.convInterpolate(x_size, y_size, theta, T, latency,initial_image)
 
-    # Echo to console
-    print("\nEvaluating plot 1:")
+    EVENT_LIST = []
 
-    # Iterate through frames
     for n in range(1,frames_count):
+        print(" Frame: ",n+1,'/',frames_count, end='\r')
+        PARTIAL_LIST, image_out[:,:,n,1] = converter.update(all_images[:,:,n])
+        EVENT_LIST = EVENT_LIST + PARTIAL_LIST
 
-        print("Frame: ",n+1,'/',frames_count, end='\r')
-
-        delta = all_images_log[:,:,n] - all_images_log[:,:,n-1]
-        # threshold = current_states * theta        # Dynamic threshold
-
-
-        for x in range(x_size):     # Iterate over x dimension
-            for y in range(y_size): # Iterate over y dimension
-
-                # Slope used for piecewise linear interpolation of pixel intensity
-                slope = (all_images_log[x,y,n] - all_images_log[x,y,n-1])/T
-
-                # Do quick burst if flag is up
-                if quick_burst[x,y] > 0 :
-                    event_time = refract_period[x,y]
-                    # Update pixel state and set new end for refractory period
-                    current_states[x,y] = all_images_log[x,y,n-1] + slope*(event_time-time)
-                    refract_period[x,y] = event_time + latency
-                    threshold_p[x,y] = current_states[x,y] + theta
-                    threshold_n[x,y] = current_states[x,y] - theta
-
-                    if quick_burst[x,y] == 1 :
-                            PARTIAL_LIST.append([x,y,event_time,-1])
-                    if quick_burst[x,y] == 2 :
-                            PARTIAL_LIST.append([x,y,event_time,1])
-                    quick_burst[x,y] = 0
-
-                # Keeps looking for events until pixel refrect period extends into next frame
-                while(refract_period[x,y] < (time+T)):
-
-                    # Case for increasing brightness
-                    if threshold_p[x,y] < all_images_log[x,y,n] and slope > 0 :
-
-                        # print("I'm here")
-
-                        # Dummy value event visualisation, might delete later
-                        image_out[x,y,n,1] = 1.0
-                        # Linear estimate of threshold crossing instance
-                        dt = abs((threshold_p[x,y] - all_images_log[x,y,n-1])/slope)
-
-                        # This section calculates the registration of the event depending on the pixels refractory period
-                        if refract_period[x,y] > time + dt :
-                            event_time = refract_period[x,y]
-                            current_states[x,y] = all_images_log[x,y,n-1] + slope*(event_time-time)
-                            refract_period[x,y] = event_time + latency
-                        else:
-                            event_time = ceil(time + dt)
-                            current_states[x,y] = current_states[x,y] + theta
-                            refract_period[x,y] = event_time + latency
-
-                        # Append event to event list and update thresholds
-                        PARTIAL_LIST.append([x,y,event_time,1])
-                        threshold_p[x,y] = current_states[x,y] + theta
-                        threshold_n[x,y] = current_states[x,y] - theta
-
-                        # Case for decreasing brightness
-                    elif threshold_n[x,y] > all_images_log[x,y,n] and slope < 0 :
-
-                        image_out[x,y,n,1] = 0.0
-                        # Linear estimate of threshold crossing instance
-                        dt = abs((threshold_n[x,y]-all_images_log[x,y,n-1])/slope)
-
-                        # This section calculates the registration of the event depending on the pixels refractory period
-                        if refract_period[x,y] > time + dt :
-                            event_time = refract_period[x,y]
-                            # Update pixel state and set new end for refractory period
-                            current_states[x,y] = all_images_log[x,y,n-1] + slope*(event_time-time)
-                            refract_period[x,y] = event_time + latency
-                        else:
-                            event_time = ceil(time + dt)
-                            # Update pixel state and set new end for refractory period
-                            current_states[x,y] = current_states[x,y] - theta
-                            refract_period[x,y] = event_time + latency
-
-
-                        PARTIAL_LIST.append([x,y, event_time,-1])
-                        threshold_p[x,y] = current_states[x,y] + theta
-                        threshold_n[x,y] = current_states[x,y] - theta
-
-                    else:
-                        break
-
-                # track if pixel should fire immidiately at the end of refractory period
-                if ((refract_period[x,y] >= (time+T)) and (threshold_p[x,y] < all_images_log[x,y,n])) :
-                    quick_burst[x,y] = 1
-                elif ((refract_period[x,y] >= (time+T)) and (threshold_n[x,y] > all_images_log[x,y,n])) :
-                    quick_burst[x,y] = 2
-
-        # Update time
-        time = time + T
-
-        # Sort the generated events and append to returned list
-        if len(PARTIAL_LIST) > 0:
-            PARTIAL_LIST.sort(key=lambda x: x[2])
-            EVENT_LIST = EVENT_LIST + PARTIAL_LIST
-            PARTIAL_LIST = []
-
-        image_out[:,:,n,2] = current_states
+    print(" ")
 
     # print("\n\nEvaluating plot 2:")
 
@@ -227,30 +120,6 @@ def createEvents(raw_images,x_size,y_size,frames_count):
         # Save the delta for visualisation
     # image_out[:,:,n,2] = all_images_log
         # image_out[:,:,n,3] = threshold
-    #
-
-
-    # for n in range(1,frames_count):
-    #     # image_out[:,:,n,2] = current_states
-    #     image_out[:,:,n,3] = all_images_log[:,:,n]
-    #     print("Frame: ",n+1,'/',frames_count, end='\r')
-    #
-    # print("Frame: ",n+1,'/',frames_count)
-
-    print("\n\nEvaluating plot 1:")
-
-    initial_image = all_images[:,:,0]
-
-    converter = CI.convInterpolate(x_size, y_size, theta, T, latency,initial_image)
-
-    EVENT_LIST = []
-
-    for n in range(1,frames_count):
-        print(" Frame: ",n+1,'/',frames_count, end='\r')
-        PARTIAL_LIST, image_out[:,:,n,3] = converter.update(all_images[:,:,n])
-        EVENT_LIST = EVENT_LIST + PARTIAL_LIST
-
-    print(" ")
 
     return image_out, EVENT_LIST
 

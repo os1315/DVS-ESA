@@ -37,8 +37,8 @@ def animateMore(j, fig, eve_images,raw_images, im,extra_images):
     new_im = []
     new_im.append(im[0].set_array(eve_images[:,:,j]))
     new_im.append(im[1].set_array(raw_images[:,:,j]))
-    new_im.append(im[2].set_array(extra_images[:,:,j,1]))
-    new_im.append(im[3].set_array(extra_images[:,:,j,0]))
+    # new_im.append(im[2].set_array(extra_images[:,:,j,1]))
+    new_im.append(im[2].set_array(extra_images[:,:,j]))
 
     return new_im
 
