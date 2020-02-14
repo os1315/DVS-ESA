@@ -37,11 +37,13 @@ class convInterpolate:
 
         self.previous_image = initial_image
 
+
     def __del__(self):
         pass
 
 
     def update(self, new_image):
+
 
         # returned variabls
         PARTIAL_LIST = []
@@ -84,6 +86,8 @@ class convInterpolate:
                         image_out[x,y] = 1.0
                         # Linear estimate of threshold crossing instance
                         dt = abs((self.threshold_p[x,y] - self.previous_image[x,y])/slope)
+
+                        # print('\n\n {} \n\n'.format(self.previous_image[x,y]))
 
                         # This section calculates the registration of the event depending on the pixels refractory period
                         if self.refract_period[x,y] > self.time + dt :

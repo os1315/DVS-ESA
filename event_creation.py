@@ -21,6 +21,7 @@ import matplotlib.animation as animation
 
 import struct
 import parse
+import time
 import importlib
 
 # My imports (have to be reloded for top level reloadto take effect)
@@ -32,7 +33,7 @@ importlib.reload(CI)
 
 def plotEvents(EVENT_LIST, theta, T, all_images_log, j, k):
 
-    # EVENT_LIST [[x,y,t,p]] or [[x,y,t,diff]]
+    # EVENT_LIST [[y,x,t,p]] or [[x,y,t,diff]]
 
     eventList = np.ones([len(EVENT_LIST),3])
 
@@ -66,8 +67,8 @@ def createEvents(raw_images,x_size,y_size,frames_count):
 
     # Camera params
     theta = 0.4
-    plot_count = 4
-    T = 50          # Sampling period in us (1/frame rate)
+    plot_count = 3
+    T = 2000          # Sampling period in us (1/frame rate)
     latency = 15    # Length of a pixels refractory period in us
 
     # Arificially add dark current
@@ -139,6 +140,8 @@ def readRatio(testName):
 
 def convertFromCompound(testName,x_size,y_size,frames):
 
+    start_time = time.time()
+
     # Preallocate array for all images
     raw_R = np.zeros((x_size,y_size,frames), dtype='float32')
     raw_G = np.zeros((x_size,y_size,frames), dtype='float32')
@@ -157,41 +160,127 @@ def convertFromCompound(testName,x_size,y_size,frames):
         b = True
 
         while b:
-            # b = image_file.read(12)
-            # self.raw_R[y,x,n], self.raw_G[y,x,n], self.raw_B[y,x,n] = struct.unpack('>fff',b)
+            ### Redaing single channel ###
             bright = image_file_bright.read(4)
             dim = image_file_dim.read(4)
             raw_images[y,x,n] = (struct.unpack('>f',bright)[0] + struct.unpack('>f',dim)[0]/contrastRatio)/1
-            # b = image_file.read(4)
-            # self.raw_images[y,x,n] = self.raw_images[y,x,n] + struct.unpack('>f',b)[0]
-            # b = image_file.read(4)
-            # self.raw_images[y,x,n] = self.raw_images[y,x,n] + struct.unpack('>f',b)[0]
-            # self.raw_images[y,x,n] = self.raw_images[y,x,n] / 3
 
-            x = x + 1
+            # Shift to next RGB triplet
+            bright = image_file_bright.read(8)
+            dim = image_file_dim.read(8)
 
             # New row or break at end
+            x = x + 1
             if (x > x_size-1):
                 x = 0
                 y = y+1
                 if (y > y_size-1):
                     break
 
-            # Shift to next RGB triplet
-            bright = image_file_bright.read(8)
-            dim = image_file_dim.read(8)
+        image_file_bright.close()
+        image_file_dim.close()
+
+    # raw_images = (raw_R + raw_G + raw_B) / 3
+
+    # CREATE FILE WITH ALL DATA
+    # np.save("frames/" + testName + "/" + testName + "_R.npy",raw_R)
+    # np.save("frames/" + testName + "/"  + testName + "_G.npy",raw_G)
+    # np.save("frames/" + testName + "/"  + testName + "_B.npy",raw_B)
+    # np.save("frames/" + testName + "/"  + testName + "_ABR.npy",raw_images)
+
+    run_time = time.time() - start_time
+
+    print("File saved!")
+    print('Runtime: {:3.2f} for {:d} images or {:3.2f} ms per image'.format(run_time, raw_images.shape[2], 1000*run_time/raw_images.shape[2] ))
+
+    return raw_images
+
+def convertWithNoisebank(testName,x_size,y_size,frames):
+
+    start_time = time.time()
+
+    # Noise bank number
+    NBnum = 1
+
+    # Preallocate array for all images
+    raw_R = np.zeros((x_size,y_size,frames), dtype='float32')
+    raw_G = np.zeros((x_size,y_size,frames), dtype='float32')
+    raw_B = np.zeros((x_size,y_size,frames), dtype='float32')
+    raw_images = np.zeros((x_size,y_size,frames), dtype='float32')
+
+    # Finds gain values from log file and adjusts relative image brightness.
+    contrastRatio = readRatio(testName)
+
+    for n in range(frames):
+        image_file_bright = open("frames/" + testName + "/" + "raw_bright/" + testName + '_{:03d}'.format(n) + ".img" , "rb")
+        image_file_dim = open("frames/" + testName + "/" + "raw_dim/" + testName + '_{:03d}'.format(n) + ".img" , "rb")
+        # print(image_file_bright)
+
+        x = y = 0
+        b = True
+
+        while b:
+
+            b = image_file_bright.read(12)
+            R_bright, G_bright, B_bright = struct.unpack('>fff',b)
+            b = image_file_dim.read(12)
+            R_dim, G_dim, B_dim = struct.unpack('>fff',b)
+
+            raw_R[y,x,n] = R_bright + R_dim/contrastRatio
+            raw_G[y,x,n] = G_bright + G_dim/contrastRatio
+            raw_B[y,x,n] = B_bright + B_dim/contrastRatio
+
+            # New row or break at end
+            x = x + 1
+            if (x > x_size-1):
+                x = 0
+                y = y+1
+                if (y > y_size-1):
+                    break
 
         image_file_bright.close()
         image_file_dim.close()
 
-    # self.raw_images = (self.raw_R + self.raw_G + self.raw_B) / 3
+    raw_images = (raw_R + raw_G + raw_B) / 3
+
+    # Add noise from noisebank
+    for image in range(raw_images.shape[2]):
+
+        # Randomly pick noise from noisebank
+        random.randrange(299)
+        noise_image = open("frames/" + noiseBank + str(NBnumber) + "/" + "raw_dim/" + noiseBank + '_{:03d}'.format(n) + ".img" , "rb")
+
+        x = y = 0
+        b = True
+
+        while b:
+
+            b = noise_image.read(4)
+            raw_images[y,x,image] = raw_images[y,x,image] + struct.unpack('>f',b)
+
+            # Shift to next triplet
+            b = noise_image.read(8)
+
+            # New row or break at end
+            x = x + 1
+            if (x > x_size-1):
+                x = 0
+                y = y+1
+                if (y > y_size-1):
+                    break
+
+        noise_image.close()
 
     # CREATE FILE WITH ALL DATA
-    # np.save("frames/" + testName + "/" + testName + "_R.npy",self.raw_R)
-    # np.save("frames/" + testName + "/"  + testName + "_G.npy",self.raw_G)
-    # np.save("frames/" + testName + "/"  + testName + "_B.npy",self.raw_B)
-    # np.save("frames/" + testName + "/"  + testName + "_ABR.npy",self.raw_images)
+    np.save("frames/" + testName + "/" + testName + "_R.npy",raw_R)
+    np.save("frames/" + testName + "/"  + testName + "_G.npy",raw_G)
+    np.save("frames/" + testName + "/"  + testName + "_B.npy",raw_B)
+    np.save("frames/" + testName + "/"  + testName + "_ABR.npy",raw_images)
+
+    run_time = time.time() - start_time
+
     print("File saved!")
+    print('Runtime: {:3.2f} for {:d} images or {:3.2f} ms per image'.format(run_time, raw_images.shape[2], 1000*run_time/raw_images.shape[2] ))
 
     return raw_images
 

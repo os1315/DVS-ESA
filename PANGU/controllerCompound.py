@@ -15,7 +15,7 @@ def strName(vector, counter):
 bashCommand = "./shell/compound.sh"
 
 #  Name of test
-testName = "testLogged"
+testName = "linearFlyby"
 
 
 # Container for all tests
@@ -26,7 +26,7 @@ testVector = []
 # test_dim = [EXp2,     QE2,   BIAS2, GAIN2,   RMS2,    DC2]
 
 test_bri = [" 1.000", " 0.09", " 0", " 1000000" , " 0.055", " 24.966"]
-test_dim = [" 0.0015", " 0.09", " 0", " 1" , " 0.055", " 24.966"]
+test_dim = [" 0.015", " 0.09", " 0", " 10" , " 0.055", " 24.966"]
 testVector.append(test_bri + test_dim)
 
 # Keep track of number of performed tests
@@ -41,11 +41,14 @@ for x in testVector:
 
     test = testName + str(counter)
 
+    # Running script, the .sh will create its own dir before opening PANGU
     try:
         process = subprocess.run(['bash', bashCommand, test, x])
         flight_file = open("frames/" + test + "/log.txt","w")
         flight_file.write(echo)
         flight_file.close()
+
+    # Upon failure this script will create the dir with the log indicating failure
     except:
         subprocess.run(['mkdir frames/', test])
 

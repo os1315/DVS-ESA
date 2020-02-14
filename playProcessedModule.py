@@ -40,6 +40,8 @@ def animateMore(j, fig, eve_images,raw_images, im,extra_images):
     # new_im.append(im[2].set_array(extra_images[:,:,j,1]))
     new_im.append(im[2].set_array(extra_images[:,:,j]))
 
+    fig.suptitle('Frame:{:d}'.format(j))
+
     return new_im
 
 def playProcessed(prc_images, frame_count):
@@ -129,7 +131,7 @@ def displayTwo(prc_images, frame_count):
     fig1.colorbar(im[1], cax=cax, orientation='vertical')
 
     #  Colorbar
-    im_ani = animation.FuncAnimation(fig1,lambda j: animateTwo(j,eve_images,raw_images,im), frames=range(frame_count),interval=100, repeat_delay=3000)
+    im_ani = animation.FuncAnimation(fig1,lambda j: animateTwo(j,eve_images,raw_images,im), frames=range(frame_count),interval=2, repeat_delay=3000)
 
     plt.show()
 
@@ -184,7 +186,7 @@ def displayThree(prc_images, frame_count):
     fig1.colorbar(im[2], cax=cax, orientation='vertical')
 
     #  Colorbar
-    im_ani = animation.FuncAnimation(fig1,lambda j: animateMore(j,fig1,eve_images,raw_images,im,extra_images), frames=range(frame_count),interval=100, repeat_delay=3000)
+    im_ani = animation.FuncAnimation(fig1,lambda j: animateMore(j,fig1,eve_images,raw_images,im,extra_images), frames=range(frame_count),interval=50, repeat_delay=3000)
 
     plt.show()
 

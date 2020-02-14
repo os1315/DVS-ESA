@@ -32,7 +32,7 @@ import playProcessedModule
 
 from testBench import TestBench
 
-TB = TestBench("testLogged1")
+TB = TestBench("linearFlyby2")
 
 run_module = True
 
