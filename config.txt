@@ -1,0 +1,2 @@
+# Any dinfigurations for the whole thing to run should be here
+target_dir	C:\PANGU\PANGU_5.00\models\itokawa

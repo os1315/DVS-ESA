@@ -11,9 +11,6 @@ import numpy as np
 from numpy import array
 from numpy import matmul
 
-# Pillow imports
-from PIL import Image
-
 # Matplotlib imports
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -34,12 +31,18 @@ import playProcessedModule
 
 class TestBench:
 
-    def __init__(self, testName):
+    def __init__(self, testName, target_dir=" "):
+
+        # Switch directory to where the data is
+        if target_dir == " ":
+            pass
+        else:
+            os.chdir(target_dir)
 
         self.testName = testName
 
-    # READ IN ALL IMAGES
-    # Try is file images had already been opened:
+        # READ IN ALL IMAGES
+        # Try is file images had already been opened:
         try:
             # The image itself
             self.raw_images = np.load("frames/" + testName + "/" + testName + "_ABR.npy")
@@ -70,24 +73,24 @@ class TestBench:
             # Image params
             self.x_size = 128   # Least square value (???)
             self.y_size = 128   # Least square value (???)
-            self.frames = 790   # Should find no. of frams from file count
+            self.frames = 199   # Should find no. of frams from file count
 
             # Preallocate array for all images
-            self.raw_R = np.zeros((self.x_size,self.y_size,self.frames), dtype='float32')
-            self.raw_G = np.zeros((self.x_size,self.y_size,self.frames), dtype='float32')
-            self.raw_B = np.zeros((self.x_size,self.y_size,self.frames), dtype='float32')
-            self.raw_images = np.zeros((self.x_size,self.y_size,self.frames), dtype='float32')
+            # self.raw_R = np.zeros((self.x_size, self.y_size, self.frames), dtype='float32')
+            # self.raw_G = np.zeros((self.x_size, self.y_size, self.frames), dtype='float32')
+            # self.raw_B = np.zeros((self.x_size, self.y_size, self.frames), dtype='float32')
+            self.raw_images = np.zeros((self.x_size, self.y_size, self.frames), dtype='float32')
 
             # Verify is it's single picture or compound
             if os.path.isdir("frames/" + testName + "/" + "raw/"):
                 print("Constructing from single image")
                 importlib.reload(event_creation)
-                self.raw_images = event_creation.convertFromSingle(testName, self.x_size, self.y_size, self.frames)
+                self.raw_images = event_creation.convertWithNoisebank(testName, self.x_size, self.y_size, self.frames, NBnum=1)
 
-            elif (os.path.isdir("frames/" + testName + "/" + "raw_dim/") and os.path.isdir("frames/" + testName + "/" + "raw_bright/")):
+            elif os.path.isdir("frames/" + testName + "/" + "raw_dim/") and os.path.isdir("frames/" + testName + "/" + "raw_bright/"):
                 print("Constructing from multiple images")
                 importlib.reload(event_creation)
-                self.raw_images = event_creation.convertWithNoisebank(testName, self.x_size, self.y_size, self.frames)
+                self.raw_images = event_creation.convertFromCompound(testName, self.x_size, self.y_size, self.frames, NBnum=1)
 
         # Mark that these are new and not processed
         self.isProcessed = False
@@ -95,14 +98,13 @@ class TestBench:
     def __del__(self):
         print("Images cleared from memory.")
 
-    def processImages(self, frame_cap = None):
+    def processImages(self, frame_cap=None):
         if frame_cap is None:
             self.processedFrames = self.frames
-        elif (frame_cap > self.frames):
+        elif frame_cap > self.frames:
             self.processedFrames = self.frames
         else:
             self.processedFrames = frame_cap
-
 
         try:
             importlib.reload(event_creation)
@@ -122,9 +124,8 @@ class TestBench:
             print("\nIMPORT FAILED! -> Processing -> Saving event list")
             print(traceback.format_exc() + '\n')
 
-
     def playProcessed(self):
-        if (self.isProcessed == True):
+        if self.isProcessed == True:
 
             try:
                 importlib.reload(playProcessedModule)
@@ -137,14 +138,11 @@ class TestBench:
             print("\nData was not processed")
 
     def playRaw(self):
-        # PRESENT THE IMAGES
-        print(self.raw_images)
 
         fig1 = plt.figure()
-        im = plt.imshow(self.raw_images[:,:,0])
-        im_ani = animation.FuncAnimation(fig1,lambda j: im.set_array(self.raw_images[:,:,j]),frames=range(self.frames),interval=100, repeat_delay=3000)
+        im = plt.imshow(self.raw_images[:, :, 0])
+        im_ani = animation.FuncAnimation(fig1, lambda j: im.set_array(self.raw_images[:, :, j]), frames=range(self.frames), interval=100, repeat_delay=3000)
         plt.show()
-
 
     def playImport(self, frame_cap = None):
         try:

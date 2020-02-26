@@ -11,9 +11,6 @@ import numpy as np
 from numpy import array
 from numpy import matmul
 
-# Pillow imports
-from PIL import Image
-
 # Matplotlib imports
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -26,50 +23,51 @@ import time
 import importlib
 import os
 
-# This is the actualy file being tested
+# This is the actually file being tested
 import event_creation
 import playProcessedModule
 
 from testBench import TestBench
 
-TB = TestBench("linearFlyby2")
+TB = TestBench("linearFlyby3", target_dir="C:/PANGU/PANGU_5.00/models/itokawa")
 
 run_module = True
 
-while (run_module == True):
+while run_module:
 
-    print("\nNext command?\n\tr - reload images \n\ti - process images \n\tv - play processed images \n\tp - process & play \n\tn - exit")
+    print("\nNext command?\n\tr - reload images \n\ti - process images \n\tv - play processed images \n\tp - process "
+          "& play \n\tt - play raw\n\tn - exit")
 
     echo = input("Input:   ")
 
-    if (echo == 'R' or echo == 'r'):
+    if echo == 'R' or echo == 'r':
         del TB
         echo = input("Image name: ")
         TB = TestBench(echo)
 
-    elif (echo == 'I' or echo == 'i'):
+    elif echo == 'I' or echo == 'i':
         cap = input('Cap frames?    ')
-        if (cap == 'n' or cap == 'N'):
+        if cap == 'n' or cap == 'N':
             pass
-        elif (cap == ''):
+        elif cap == '':
             TB.processImages()
         else:
             TB.processImages(int(cap))
 
-    elif (echo == 'V' or echo == 'v'):
+    elif echo == 'V' or echo == 'v':
         TB.playProcessed()
 
-    elif (echo == 'P' or echo == 'p'):
+    elif echo == 'P' or echo == 'p':
         cap = input('Cap frames?    ')
-        if (cap == 'n' or cap == 'N'):
+        if cap == 'n' or cap == 'N':
             pass
-        elif (cap == ''):
+        elif cap == '':
             TB.playImport()
         else:
             TB.playImport(int(cap))
 
-    elif (echo == 'N' or echo == 'n'):
+    elif echo == 'N' or echo == 'n':
         run_module = False
 
-    elif (echo == 'T' or echo == 't'):
+    elif echo == 'T' or echo == 't':
         TB.playRaw()
