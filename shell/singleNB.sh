@@ -2,35 +2,38 @@
 
 # Variables from Python
 NEW_FILE=$1
+TARG_DIR=$2
 
-# Bright params
-EXP1=$2
-QE1=$3
-BIAS1=$4
-GAIN1=$5
-RMS1=$6
-DC1=$7
+# Camera params
+EXP1=$3
+QE1=$4
+BIAS1=$5
+GAIN1=$6
+RMS1=$7
+DC1=$8
 
-cd "C:/PANGU/PANGU_5.00/models/itokawa"
+cd $TARG_DIR
 
 NEW_PATH="frames/${NEW_FILE}"
 
 if [ -d $NEW_PATH ]
 then
   echo "A folder for $NEW_FILE exists"
+  echo "I am set to exit to prevent overwrite, change singleNB.sh in order to override that."
+  echo " "
+  exit
 else
   echo "Creating new directory for $NEW_FILE"
   mkdir $NEW_PATH
-  NEW_PATH="frames/${NEW_FILE}/raw_bright"
-  NEW_CMD="frames/${NEW_FILE}/raw_bright/${NEW_FILE}_%03d"
+  NEW_PATH="frames/${NEW_FILE}/raw"
+  NEW_CMD="frames/${NEW_FILE}/raw/${NEW_FILE}_%03d"
   mkdir $NEW_PATH
 fi
 
-# Basic view script for Itokawa model using standard radiance camera.
+# View script for generated model importing camera settings.
 ../../bin/viewer \
 	-noini \
 	-ini ../pangu.ini \
-	-ini itokawa.ini \
 	-err - \
 	\
 	-colour 1 1 1 \
@@ -66,7 +69,7 @@ fi
   -flight test_traj.fli \
   -movie \
   -image_format float \
-  -savefmt "frames/${NEW_FILE}/raw_bright/${NEW_FILE}_%03d" \
+  -savefmt "frames/${NEW_FILE}/raw/${NEW_FILE}_%03d" \
   -quit \
-  itokawa_q512.pan \
+  model.pan \
   \

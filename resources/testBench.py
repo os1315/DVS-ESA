@@ -23,8 +23,14 @@ import time
 import importlib
 import os
 import traceback
+import sys
 
-# This is the actualy file being tested
+sys.path.append('./resources')
+
+# My other imports
+from Filehandling import readinConfig
+
+# This is the actually file being tested
 import event_creation
 import playProcessedModule
 
@@ -44,6 +50,8 @@ class TestBench:
         # READ IN ALL IMAGES
         # Try is file images had already been opened:
         try:
+            start_time = time.time()
+
             # The image itself
             self.raw_images = np.load("frames/" + testName + "/" + testName + "_ABR.npy")
 
@@ -64,8 +72,9 @@ class TestBench:
 
             self.isProcessed = False
 
-            print("\nRead-in from saved numpy array.")
-            # Do sth
+            # Echo success
+            run_time = time.time() - start_time
+            print('\nRead-in from saved numpy array in {} s'.format(run_time/1000))
 
         except IOError:
             print("\nFirst time opening, converting to numpy array")
@@ -73,7 +82,7 @@ class TestBench:
             # Image params
             self.x_size = 128   # Least square value (???)
             self.y_size = 128   # Least square value (???)
-            self.frames = 199   # Should find no. of frams from file count
+            self.frames = len(os.listdir(target_dir + "/frames/" + testName + "/raw"))   # Find # of frams from file count
 
             # Preallocate array for all images
             # self.raw_R = np.zeros((self.x_size, self.y_size, self.frames), dtype='float32')
@@ -85,7 +94,7 @@ class TestBench:
             if os.path.isdir("frames/" + testName + "/" + "raw/"):
                 print("Constructing from single image")
                 importlib.reload(event_creation)
-                self.raw_images = event_creation.convertWithNoisebank(testName, self.x_size, self.y_size, self.frames, NBnum=1)
+                self.raw_images = event_creation.convertWithNoisebank(testName, self.x_size, self.y_size, self.frames, NBnum=1) # Note you need NBnum specifying bank otherwise it will attempt compound
 
             elif os.path.isdir("frames/" + testName + "/" + "raw_dim/") and os.path.isdir("frames/" + testName + "/" + "raw_bright/"):
                 print("Constructing from multiple images")

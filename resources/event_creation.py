@@ -3,6 +3,7 @@
 import importlib
 import random
 import struct
+import sys
 import time
 
 # Matplotlib imports
@@ -15,6 +16,7 @@ import parse
 # My imports (have to be reloaded for top level reload to take effect)
 # import singlePixelTransform
 import convInterpolate as CI
+from Filehandling import ProgressTracker
 
 importlib.reload(CI)
 
@@ -96,7 +98,7 @@ def readRatio(testName, NB=None):
         GAIN1 = parse.search("GAIN1: {:d};", log_string)[0]
         log_file.close()
 
-        log_file = open("frames/noiseBank" + str(NB) + "/" + "log.txt", "r")
+        log_file = open("frames/noiseBank" + "/" + "log.txt", "r")
         log_string = log_file.read()
         GAIN2 = parse.search("GAIN1: {:d};", log_string)[0]
         log_file.close()
@@ -177,10 +179,17 @@ def convertWithNoisebank(testName, x_size, y_size, frames, NBnum=None):
     if NBnum is not None:
         contrastRatio = readRatio(testName, NB=NBnum)
 
+    # For progress echos to console
+    tracker = ProgressTracker(frames)
+
     # Read in frames
     for n in range(frames):
         image_file_bright = open("frames/" + testName + "/" + "raw/" + testName + '_{:03d}'.format(n) + ".img",
                                  "rb")
+
+        # Echo progress to console
+        tracker.update(n)
+
         x = y = 0
         b = True
 
@@ -212,15 +221,23 @@ def convertWithNoisebank(testName, x_size, y_size, frames, NBnum=None):
     noise_B = np.zeros((x_size, y_size), dtype='float32')
     noise_image = np.zeros((x_size, y_size), dtype='float32')
 
+
     # Verify if it should add noise
     if NBnum is not None:
+
+        # Echo complete to console
+        tracker.complete("Images read-in from file, adding noise...")
+
         # Iterate through read images
         for image in range(raw_images.shape[2]):
 
+            # Echo progress to console
+            tracker.update(image)
+
             # Randomly pick noise from noise bank
             rand = random.randrange(299)
-            noise_file = open("frames/noiseBank" + str(NBnum) + "/" + "raw/noiseBank" + '_{:03d}'.format(rand) + ".img",
-                              "rb")
+            noise_file = open("frames/noiseBank" + str(NBnum) + "/" + "raw/noiseBank" + '_{:03d}'.format(rand) + ".img", "rb")
+            noise_file = open("frames/noiseBank" + str(NBnum) + "/" + "raw/noiseBank" + '_{:03d}'.format(rand) + ".img", "rb")
 
             # Iterate through file in 12 byte batches (RGB triplets)
             x = y = 0
@@ -254,10 +271,16 @@ def convertWithNoisebank(testName, x_size, y_size, frames, NBnum=None):
             raw_B[:, :, image] = raw_B[:, :, image] + noise_B / contrastRatio + padding
             raw_images[:, :, image] = raw_images[:, :, image] + noise_image / contrastRatio + padding
 
+        # Echo complete to console
+        tracker.complete("Noise added, saving...\n")
+
     # This is here just to allow conversion of images that contain zeroes
     else:
+        # Echo of no noise
+        tracker.complete("No noise selected, adding padding and saving...")
+
         for image in range(raw_images.shape[2]):
-            padding = 10**(-11)
+            padding = np.min(raw_R)  # Arbitrarily decided what the padding is
             raw_R[:, :, image] = raw_B[:, :, image] + padding
             raw_G[:, :, image] = raw_G[:, :, image] + padding
             raw_B[:, :, image] = raw_B[:, :, image] + padding

@@ -28,8 +28,10 @@ import event_creation
 import playProcessedModule
 
 from testBench import TestBench
+from Filehandling import readinConfig
 
-TB = TestBench("linearFlyby3", target_dir="C:/PANGU/PANGU_5.00/models/itokawa")
+
+TB = TestBench("constDescent2", target_dir=readinConfig())
 
 run_module = True
 
@@ -41,9 +43,13 @@ while run_module:
     echo = input("Input:   ")
 
     if echo == 'R' or echo == 'r':
-        del TB
         echo = input("Image name: ")
-        TB = TestBench(echo)
+        if os.path.exists(readinConfig() + "/" + echo):
+            del TB
+            TB = TestBench(echo)
+        else:
+            print("\nNo such test exists!")
+            print("Images have NOT been deleted.\n")
 
     elif echo == 'I' or echo == 'i':
         cap = input('Cap frames?    ')

@@ -1,15 +1,8 @@
 # Math imports
-from math import pi
-from math import sqrt
-from math import cos
-from math import sin
-from math import floor
 from math import ceil
 
 # Numpy imports
 import numpy as np
-from numpy import array
-from numpy import matmul
 
 
 class convInterpolate:
