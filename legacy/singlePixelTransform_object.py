@@ -1,33 +1,21 @@
 # Math imports
-from math import pi
-from math import sqrt
-from math import cos
-from math import sin
-from math import floor
 from math import ceil
 
 # Numpy imports
 import numpy as np
-from numpy import array
-from numpy import matmul
 
 # Pillow imports
-from PIL import Image
 
 # Matplotlib imports
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import matplotlib.animation as animation
 
 # Other imports
-import struct
 import parse
 import time as tm
-import importlib
-import os
 
 # This is the actualy file being tested
 import event_creation
+
 
 class Pixel:
 
@@ -180,7 +168,7 @@ GAIN2 = parse.search("GAIN2: {:d};", log_string)[0]
 
 log_file.close()
 
-raw_images = event_creation.convertFromCompound("testLogged1",x_size,y_size,frames)
+raw_images = event_creation.convertFromCompound("testLogged1", x_size, y_size, frames)
 testVector = np.log10(raw_images[70,16,20:40])
 # testVector = raw_images[70,16,:]
 

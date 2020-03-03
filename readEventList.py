@@ -4,12 +4,9 @@ import parse
 
 # Matplotlib imports
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import matplotlib.animation as animation
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import playProcessedModule as PPM
 
 # Dir to event list
 file = "testLogged1"

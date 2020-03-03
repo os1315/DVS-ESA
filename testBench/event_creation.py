@@ -3,7 +3,6 @@
 import importlib
 import random
 import struct
-import sys
 import time
 
 # Matplotlib imports
@@ -15,8 +14,8 @@ import parse
 
 # My imports (have to be reloaded for top level reload to take effect)
 # import singlePixelTransform
-import convInterpolate as CI
-from Filehandling import ProgressTracker
+from processing import convInterpolate as CI
+from auxiliary.Filehandling import ProgressTracker
 
 importlib.reload(CI)
 

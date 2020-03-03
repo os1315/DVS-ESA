@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 sys.path.append('./resources')
-from Filehandling import readinConfig
+from auxiliary.Filehandling import readinConfig
 
 
 # # Variables from Python

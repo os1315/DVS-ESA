@@ -1,34 +1,16 @@
 # Math imports
-from math import pi
-from math import sqrt
-from math import cos
-from math import sin
-from math import floor
-from math import ceil
 
 # Numpy imports
-import numpy as np
-from numpy import array
-from numpy import matmul
 
 # Matplotlib imports
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import matplotlib.animation as animation
 
 # Other imports
-import struct
-import parse
-import time
-import importlib
 import os
 
 # This is the actually file being tested
-import event_creation
-import playProcessedModule
 
 from testBench import TestBench
-from Filehandling import readinConfig
+from auxiliary.Filehandling import readinConfig
 
 
 TB = TestBench("constDescent2", target_dir=readinConfig())

@@ -1,24 +1,15 @@
 # Math imports
-from math import pi
-from math import sqrt
-from math import cos
-from math import sin
-from math import floor
 from math import ceil
 
 # Numpy imports
 import numpy as np
-from numpy import array
-from numpy import matmul
 
 # Matplotlib imports
 import matplotlib.pyplot as plt
 
 # Other imports
-import struct
 import parse
 import time as tm
-import os
 import traceback
 
 # This is the actualy file being tested
@@ -47,7 +38,7 @@ GAIN2 = parse.search("GAIN2: {:d};", log_string)[0]
 log_file.close()
 
 # Reconstruct images
-raw_images = event_creation.convertFromCompound("testLogged1",x_size,y_size,frames)
+raw_images = event_creation.convertFromCompound("testLogged1", x_size, y_size, frames)
 testVector = np.log10(raw_images[j,k,:])
 
 # Track conversion execution time
