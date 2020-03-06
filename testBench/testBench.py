@@ -14,6 +14,8 @@ import os
 import traceback
 import sys
 
+from Filehandling import readinFrameRate
+
 sys.path.append('./resources')
 
 # My other imports
@@ -33,7 +35,11 @@ class TestBench:
         else:
             os.chdir(target_dir)
 
-        self.testName = testName
+        self.test_name = testName
+
+        # Extract frame rate from fli file
+        self.frame_rate = readinFrameRate(self.test_name)
+        print("Frame rate: ", self.frame_rate)
 
         # READ IN ALL IMAGES
         # Try is file images had already been opened:
@@ -70,7 +76,10 @@ class TestBench:
             # Image params
             self.x_size = 128   # Least square value (???)
             self.y_size = 128   # Least square value (???)
-            self.frames = len(os.listdir(target_dir + "/frames/" + testName + "/raw"))   # Find # of frams from file count
+            try:
+                self.frames = len(os.listdir(target_dir + "/frames/" + testName + "/raw"))   # Find # of frams from file count
+            except FileNotFoundError:
+                self.frames = len(os.listdir(target_dir + "/frames/" + testName + "/raw_bright"))  # Find # of frams from file count
 
             # Preallocate array for all images
             # self.raw_R = np.zeros((self.x_size, self.y_size, self.frames), dtype='float32')
@@ -87,7 +96,7 @@ class TestBench:
             elif os.path.isdir("frames/" + testName + "/" + "raw_dim/") and os.path.isdir("frames/" + testName + "/" + "raw_bright/"):
                 print("Constructing from multiple images")
                 importlib.reload(event_creation)
-                self.raw_images = event_creation.convertFromCompound(testName, self.x_size, self.y_size, self.frames, NBnum=1)
+                self.raw_images = event_creation.convertFromCompound(testName, self.x_size, self.y_size, self.frames)
 
         # Mark that these are new and not processed
         self.isProcessed = False
@@ -96,6 +105,8 @@ class TestBench:
         print("Images cleared from memory.")
 
     def processImages(self, frame_cap=None):
+
+        # Capping frames
         if frame_cap is None:
             self.processedFrames = self.frames
         elif frame_cap > self.frames:
@@ -103,16 +114,18 @@ class TestBench:
         else:
             self.processedFrames = frame_cap
 
+        # Launching converter
         try:
             importlib.reload(event_creation)
-            self.prc_images, EVENT_LIST = event_creation.createEvents(self.raw_images, self.x_size, self.y_size, self.processedFrames)
+            self.prc_images, EVENT_LIST = event_creation.createEvents(self.raw_images, self.frame_rate)
             self.isProcessed = True
         except Exception as e:
             print("\nIMPORT FAILED! -> Processing")
             print(traceback.format_exc() + '\n')
 
+        # Saving event list
         try:
-            EVENT_FILE = open("frames/" + self.testName + "/eventlist.txt", 'w')
+            EVENT_FILE = open("frames/" + self.test_name + "/eventlist.txt", 'w')
             EVENT_FILE.write("T: " + str(50) + ";\n")
             for event in EVENT_LIST:
                 EVENT_FILE.write("x: " + str(event[0]) + "; y: " + str(event[1]) + "; t: " + "{:.0f}".format(event[2]) + "; p: " + str(event[3]) + "\n" )

@@ -25,10 +25,14 @@ then
 else
   echo "Creating new directory for $NEW_FILE"
   mkdir $NEW_PATH
+  cp test_traj.fli $NEW_PATH
   NEW_PATH="frames/${NEW_FILE}/raw"
   NEW_CMD="frames/${NEW_FILE}/raw/${NEW_FILE}_%03d"
   mkdir $NEW_PATH
 fi
+
+
+
 
 # View script for generated model importing camera settings.
 ../../bin/viewer \
@@ -73,3 +77,4 @@ fi
   -quit \
   model.pan \
   \
+

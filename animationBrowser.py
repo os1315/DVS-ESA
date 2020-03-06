@@ -13,7 +13,7 @@ from testBench import TestBench
 from auxiliary.Filehandling import readinConfig
 
 
-TB = TestBench("constDescent2", target_dir=readinConfig())
+TB = TestBench("constDescent4", target_dir=readinConfig())
 
 run_module = True
 

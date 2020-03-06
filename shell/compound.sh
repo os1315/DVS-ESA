@@ -2,22 +2,26 @@
 
 # Variables from Python
 NEW_FILE=$1
+TARG_DIR=$2
 
 # Bright params
-EXP1=$2
-QE1=$3
-BIAS1=$4
-GAIN1=$5
-RMS1=$6
-DC1=$7
+EXP1=$3
+QE1=$4
+BIAS1=$5
+GAIN1=$6
+RMS1=$7
+DC1=$8
 
 # Dim params
-EXP2=$8
-QE2=$9
-BIAS2=${10}
-GAIN2=${11}
-RMS2=${12}
-DC2=${13}
+EXP2=$9
+QE2=${10}
+BIAS2=${11}
+GAIN2=${12}
+RMS2=${13}
+DC2=${14}
+
+echo $TARG_DIR
+cd $TARG_DIR
 
 
 NEW_PATH="frames/${NEW_FILE}"
@@ -25,9 +29,13 @@ NEW_PATH="frames/${NEW_FILE}"
 if [ -d $NEW_PATH ]
 then
   echo "A folder for $NEW_FILE exists"
+  echo "I am set to exit to prevent overwrite, change singleNB.sh in order to override that."
+  echo " "
+  exit
 else
   echo "Creating new directory for $NEW_FILE"
   mkdir $NEW_PATH
+  cp test_traj.fli $NEW_PATH
   NEW_PATH="frames/${NEW_FILE}/raw_bright"
   NEW_CMD="frames/${NEW_FILE}/raw_bright/${NEW_FILE}_%03d"
   mkdir $NEW_PATH
@@ -37,7 +45,6 @@ fi
 ../../bin/viewer \
 	-noini \
 	-ini ../pangu.ini \
-	-ini itokawa.ini \
 	-err - \
 	\
 	-colour 1 1 1 \
@@ -75,7 +82,7 @@ fi
   -image_format float \
   -savefmt "frames/${NEW_FILE}/raw_bright/${NEW_FILE}_%03d" \
   -quit \
-  itokawa_q512.pan \
+  model.pan \
   \
 
 NEW_PATH="frames/${NEW_FILE}/raw_dim"
@@ -85,7 +92,6 @@ mkdir $NEW_PATH
 ../../bin/viewer \
 	-noini \
 	-ini ../pangu.ini \
-	-ini itokawa.ini \
 	-err - \
 	\
 	-colour 1 1 1 \
@@ -123,5 +129,5 @@ mkdir $NEW_PATH
   -image_format float \
   -savefmt "frames/${NEW_FILE}/raw_dim/${NEW_FILE}_%03d" \
   -quit \
-  itokawa_q512.pan \
+  model.pan \
   \

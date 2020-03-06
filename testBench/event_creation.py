@@ -15,7 +15,7 @@ import parse
 # My imports (have to be reloaded for top level reload to take effect)
 # import singlePixelTransform
 from processing import convInterpolate as CI
-from auxiliary.Filehandling import ProgressTracker
+from auxiliary.Filehandling import ProgressTracker, readinFrameRate
 
 importlib.reload(CI)
 
@@ -46,14 +46,15 @@ def plotEvents(EVENT_LIST, T, all_images_log, j, k):
     plt.show()
 
 
-def createEvents(raw_images, x_size, y_size, frames_count):
+def createEvents(raw_images, frame_rate):
     # List of events
     EVENT_LIST = []
 
+    x_size, y_size, frames_count = raw_images.shape
     # Camera params
     theta = 0.6
     plot_count = 3
-    T = 2000  # Sampling period in us (1/frame rate)
+    T = 1 / frame_rate  # Sampling period in us (1/frame rate)
     latency = 15  # Length of a pixels refractory period in us
 
     # Artificially add dark current
@@ -106,6 +107,7 @@ def readRatio(testName, NB=None):
 
 
 def convertFromCompound(testName, x_size, y_size, frames):
+    # Measure time
     start_time = time.time()
 
     # Preallocate array for all images
@@ -114,10 +116,20 @@ def convertFromCompound(testName, x_size, y_size, frames):
     raw_B = np.zeros((x_size, y_size, frames), dtype='float32')
     raw_images = np.zeros((x_size, y_size, frames), dtype='float32')
 
-    # Finds gain values from log file and adjusts relative image brightness.
-    contrastRatio = readRatio(testName)
+    # Finds gain values from log file and adjusts relative image brightness.    (FIX IT!!!!)
+    # contrast_ratio_noise = readRatio(testName)
+
+    # Finds the values from log file and adjusts the relative image brightness
+    contrast_ratio_image = readRatio(testName)
+
+    # For progress echos to console
+    tracker = ProgressTracker(frames)
 
     for n in range(frames):
+
+        # Echo progress to console
+        tracker.update(n)
+
         image_file_bright = open("frames/" + testName + "/" + "raw_bright/" + testName + '_{:03d}'.format(n) + ".img",
                                  "rb")
         image_file_dim = open("frames/" + testName + "/" + "raw_dim/" + testName + '_{:03d}'.format(n) + ".img", "rb")
@@ -127,14 +139,23 @@ def convertFromCompound(testName, x_size, y_size, frames):
         b = True
 
         while b:
-            ### Redaing single channel ###
-            bright = image_file_bright.read(4)
-            dim = image_file_dim.read(4)
-            raw_images[y, x, n] = (struct.unpack('>f', bright)[0] + struct.unpack('>f', dim)[0] / contrastRatio) / 1
 
-            # Shift to next RGB triplet
-            bright = image_file_bright.read(8)
-            dim = image_file_dim.read(8)
+            b = image_file_bright.read(12)
+            R_bright, G_bright, B_bright = struct.unpack('>fff', b)
+
+            b = image_file_dim.read(12)
+            R_dim, G_dim, B_dim = struct.unpack('>fff', b)
+
+            if (R_bright + G_bright + B_bright)/3 < 0.001:
+                raw_R[y, x, n] = R_dim/contrast_ratio_image
+                raw_G[y, x, n] = G_dim/contrast_ratio_image
+                raw_B[y, x, n] = B_dim/contrast_ratio_image
+            else:
+                raw_R[y, x, n] = R_bright
+                raw_G[y, x, n] = G_bright
+                raw_B[y, x, n] = B_bright
+
+            raw_images[y, x, n] = (raw_R[y, x, n] + raw_G[y, x, n] + raw_B[y, x, n]) / 3
 
             # New row or break at end
             x = x + 1
@@ -147,13 +168,34 @@ def convertFromCompound(testName, x_size, y_size, frames):
         image_file_bright.close()
         image_file_dim.close()
 
-    # raw_images = (raw_R + raw_G + raw_B) / 3
+
+    ## Add noise from noise bank
+    # NOT YET IMPLEMENTED
+
+    # Echo of no noise
+    tracker.complete("No noise selected, adding padding...")
+
+    for image in range(raw_images.shape[2]):
+
+        tracker.update(image)
+
+        subset = raw_R[:, :, image]
+        padding = np.min(subset[np.nonzero(subset[:, :])]) * 100  # Arbitrarily decided what the padding is
+
+        print("\nPadding: ", padding)
+        raw_R[:, :, image] = raw_R[:, :, image] + padding
+        raw_G[:, :, image] = raw_G[:, :, image] + padding
+        raw_B[:, :, image] = raw_B[:, :, image] + padding
+        raw_images[:, :, image] = raw_images[:, :, image] + padding
+        print("Min value: ", np.min(raw_images[:, :, image]))
+
+    tracker.complete("Saving...")
 
     # CREATE FILE WITH ALL DATA
-    # np.save("frames/" + testName + "/" + testName + "_R.npy",raw_R)
-    # np.save("frames/" + testName + "/"  + testName + "_G.npy",raw_G)
-    # np.save("frames/" + testName + "/"  + testName + "_B.npy",raw_B)
-    # np.save("frames/" + testName + "/"  + testName + "_ABR.npy",raw_images)
+    np.save("frames/" + testName + "/" + testName + "_R.npy", raw_R)
+    np.save("frames/" + testName + "/" + testName + "_G.npy", raw_G)
+    np.save("frames/" + testName + "/" + testName + "_B.npy", raw_B)
+    np.save("frames/" + testName + "/" + testName + "_ABR.npy", raw_images)
 
     run_time = time.time() - start_time
 
@@ -220,7 +262,6 @@ def convertWithNoisebank(testName, x_size, y_size, frames, NBnum=None):
     noise_B = np.zeros((x_size, y_size), dtype='float32')
     noise_image = np.zeros((x_size, y_size), dtype='float32')
 
-
     # Verify if it should add noise
     if NBnum is not None:
 
@@ -279,7 +320,7 @@ def convertWithNoisebank(testName, x_size, y_size, frames, NBnum=None):
         tracker.complete("No noise selected, adding padding and saving...")
 
         for image in range(raw_images.shape[2]):
-            padding = np.min(raw_R)  # Arbitrarily decided what the padding is
+            padding = np.min(raw_R)/10  # Arbitrarily decided what the padding is
             raw_R[:, :, image] = raw_B[:, :, image] + padding
             raw_G[:, :, image] = raw_G[:, :, image] + padding
             raw_B[:, :, image] = raw_B[:, :, image] + padding

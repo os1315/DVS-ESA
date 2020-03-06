@@ -19,7 +19,16 @@ import matplotlib.pyplot as plt
 # Notes:
 #   1. All values in bare SI (m,s,etc.)
 
-def linearTraj(R,x0,y0,v_intend):
+# Returns a est of coordinates for location at each time step
+# Should be changed to return all coordinates
+def linearFlyby(frame_rate):
+
+    R = 1.5 * 1000  # How close do we fly-by
+    x0 = 10 * 1000  # Starting x
+    y0 = -5 * 1000  # Starting y
+    v = 7 * 1000  # Speed in asteroid coordinate frame
+
+    v_intend = v/frame_rate
 
     R0 = x0*x0 + y0*y0
     b = (-1)*2*R*R*x0
@@ -48,7 +57,6 @@ def linearTraj(R,x0,y0,v_intend):
         x = x + (x0 - x[x.shape[0]-1])
         x = np.flip(x,0)
 
-
     if yf-y0 > 0:
         y = np.arange(y0,yf+t_norm*m,t_norm*m)
     else:
@@ -64,85 +72,74 @@ def rotationTraj():
     # Variables
     R = 900
     angle = 120
-    step  = 3
+    step = 3
 
     # Rotation mat:
     # cos(x) -sin(x)
     # sin(x)  cos(x)
 
     # Initial point and preallocate vector
-    x0 = array([[800],[0]])
+    x0 = np.array([[800],[0]])
     x = np.zeros([2,int(angle/step+1)])
 
     for n in range(int(angle/step+1)):
-        rot = array([[cos(n*step*2*pi/360),-sin(n*step*2*pi/360)],[sin(n*step*2*pi/360),cos(n*step*2*pi/360)]])
-        a = np.transpose(matmul(rot,x0))
+        rot = np.array([[cos(n*step*2*pi/360),-sin(n*step*2*pi/360)],[sin(n*step*2*pi/360),cos(n*step*2*pi/360)]])
+        a = np.transpose(np.matmul(rot,x0))
         x[:,n] = a
         # print(x[:,n].shape)
         # print(a.shape)
 
-    return x,y
+    return x, y
 
+def linearDescent(frame_rate):
+
+    # Tweaked values
+    init_h = 3000
+    end_h = 2500
+    t_total = 20
+    v_avg = (end_h - init_h) / t_total
+    steps = t_total * frame_rate + 1
+
+    # Default values
+    x0 = 0
+    y0 = 0
+    yaw0 = 0
+    pitch0 = -90
+    roll0 = 0
+
+    coord_set = np.zeros([steps, 6])
+    print(coord_set.shape)
+    coord_set[0, :] = [x0, y0, init_h, yaw0, pitch0, roll0]
+
+    for n in range(1, steps):
+        # indexes = [z, y, x , yaw, pitch, roll]
+        z_next = coord_set[n-1, 2] + v_avg / frame_rate
+        coord_set[n, :] = [x0, y0, z_next, yaw0, pitch0, roll0]
+
+    return coord_set
 
 ################################
 ######### Main program #########
 ################################
 
-R  = 1.5 * 1000        # How close do we fly-by
-x0 = 10 * 1000   # Starting x
-y0 = -5 * 1000  # Starting y
-frame_rate = 500   # How many frames per second
-v = 7 * 1000     # Speed in asteroid coordinate frame
+frame_rate = 5
 
+points = linearDescent(frame_rate)
 
-yaw1,x1,y1 = linearTraj(R,x0,y0,v/frame_rate)
-
-# for n in range(x1.shape[0]):
-#     print('x: {:2.2f}, y: {:2.2f}'.format(x1[n], y1[n]))
-
-print('Duration: {}'.format(x1.shape[0]/frame_rate))
-print('Number of points: {}'.format(x1.shape[0]))
-
-# plt.scatter(x1,y1)
-# plt.show()
-
+print('Duration: {}'.format(points.shape[0]/frame_rate))
+print('Number of points: {}'.format(points.shape[0]))
 
 # Save to file
-flight_file = open("test_traj.fli","w")
+flight_file = open("test_traj.fli", "w")
 
+flight_file.write('# Frame rate: {}\n\r\n\r'.format(frame_rate))
 flight_file.write('# Start in craft (yaw/pitch/roll) mode.\n\r')
-flight_file.write('view craft\n\r\n\r')
+flight_file.write('view craft\n\r')
 
 
-for m in range(x1.shape[0]):
-    # flight_file.write('start 0 {0:4.2f} {1:4.2f} 0 -90 0\n\r'.format(x[0,m], x[1,m]) )
-    flight_file.write( 'start {0:3.2f} '.format(x1[m]))
-    flight_file.write( '{0:4.2f} 0 '.format(y1[m]))
-    flight_file.write( '{0:4.2f} 0 0\n\r'.format(60) )
-
-
-
-# for m in range(300):
-#     flight_file.write("start 0 9999 9999 0 -90 0\n" )
-
-#
-# plt.scatter(x[0],x[1])
-# plt.scatter(0,0)
-# plt.grid(True)
-#
-# plt.axes().set_aspect('equal', 'datalim')
-# plt.show()
-#
-# # Save to file
-# flight_file = open("test_traj.fli","w")
-#
-# flight_file.write('# Start in craft (yaw/pitch/roll) mode.\n\r')
-# flight_file.write('view model\n\r\n\r')
-#
-# for m in range(120):
-#     # flight_file.write('start 0 {0:4.2f} {1:4.2f} 0 -90 0\n\r'.format(x[0,m], x[1,m]) )
-#     flight_file.write('start 0 0 0 1500 {0:4.2f} 0\n\r'.format(m) )
-#
+for m in range(points.shape[0]):
+    output_string = 'start {:4.2f} {:4.2f} {:4.2f} {:4.2f} {:4.2f} {:4.2f} \n'.format(points[m, 0], points[m, 1], points[m, 2], points[m, 3], points[m, 4], points[m, 5])
+    flight_file.write(output_string)
 
 
 
