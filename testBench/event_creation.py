@@ -14,13 +14,15 @@ import parse
 
 # My imports (have to be reloaded for top level reload to take effect)
 # import singlePixelTransform
-from processing import convInterpolate as CI
-from auxiliary.Filehandling import ProgressTracker, readinFrameRate
+import convInterpolate as CI
+from auxiliary.Filehandling import ProgressTracker
 
 importlib.reload(CI)
 
 
 def plotEvents(EVENT_LIST, T, all_images_log, j, k):
+    """This is a testing function left over from when the createEvents functions was first created"""
+
     # EVENT_LIST [[y,x,t,p]] or [[x,y,t,diff]]
 
     eventList = np.ones([len(EVENT_LIST), 3])
@@ -52,7 +54,7 @@ def createEvents(raw_images, frame_rate):
 
     x_size, y_size, frames_count = raw_images.shape
     # Camera params
-    theta = 0.6
+    theta = 0.2
     plot_count = 3
     T = 1 / frame_rate  # Sampling period in us (1/frame rate)
     latency = 15  # Length of a pixels refractory period in us
@@ -68,7 +70,7 @@ def createEvents(raw_images, frame_rate):
 
     initial_image = all_images[:, :, 0]
 
-    converter = CI.convInterpolate(x_size, y_size, theta, T, latency, initial_image)
+    converter = CI.convInterpolate(theta, T, latency, initial_image)
 
     for n in range(1, frames_count):
         print(" Frame: ", n + 1, '/', frames_count)
@@ -105,6 +107,9 @@ def readRatio(testName, NB=None):
 
     return GAIN1 / GAIN2
 
+def readImageIdxFormat(testName):
+    return
+
 
 def convertFromCompound(testName, x_size, y_size, frames):
     # Measure time
@@ -130,9 +135,9 @@ def convertFromCompound(testName, x_size, y_size, frames):
         # Echo progress to console
         tracker.update(n)
 
-        image_file_bright = open("frames/" + testName + "/" + "raw_bright/" + testName + '_{:03d}'.format(n) + ".img",
+        image_file_bright = open("frames/" + testName + "/" + "raw_bright/" + testName + '_{:05d}'.format(n) + ".img",
                                  "rb")
-        image_file_dim = open("frames/" + testName + "/" + "raw_dim/" + testName + '_{:03d}'.format(n) + ".img", "rb")
+        image_file_dim = open("frames/" + testName + "/" + "raw_dim/" + testName + '_{:05d}'.format(n) + ".img", "rb")
         # print(image_file_bright)
 
         x = y = 0
@@ -225,7 +230,7 @@ def convertWithNoisebank(testName, x_size, y_size, frames, NBnum=None):
 
     # Read in frames
     for n in range(frames):
-        image_file_bright = open("frames/" + testName + "/" + "raw/" + testName + '_{:03d}'.format(n) + ".img",
+        image_file_bright = open("frames/" + testName + "/" + "raw/" + testName + '_{:05d}'.format(n) + ".img",
                                  "rb")
 
         # Echo progress to console
@@ -337,57 +342,5 @@ def convertWithNoisebank(testName, x_size, y_size, frames, NBnum=None):
     print("File saved!")
     print('Runtime: {:3.2f} for {:d} images or {:3.2f} ms per image'.format(run_time, raw_images.shape[2],
                                                                             1000 * run_time / raw_images.shape[2]))
-
-    return raw_images
-
-
-def convertFromSingle(testName, x_size, y_size, frames):
-    # Preallocate array for all images
-    raw_R = np.zeros((x_size, y_size, frames), dtype='float32')
-    raw_G = np.zeros((x_size, y_size, frames), dtype='float32')
-    raw_B = np.zeros((x_size, y_size, frames), dtype='float32')
-    raw_images = np.zeros((x_size, y_size, frames), dtype='float32')
-
-    for n in range(frames):
-        # image_file = open("frames/" + testName + "/" + "raw/" + testName + '_{:03d}'.format(n) + ".img" , "rb")
-        image_file = open("frames/" + testName + "/" + "raw/" + "noisetest_0" + '_{:03d}'.format(n) + ".img", "rb")
-        print(image_file)
-
-        x = y = 0
-        b = True
-
-        while b:
-            # b = image_file.read(12)
-            # self.raw_R[y,x,n], self.raw_G[y,x,n], self.raw_B[y,x,n] = struct.unpack('>fff',b)
-            b = image_file.read(4)
-            raw_images[y, x, n] = struct.unpack('>f', b)[0]
-            # b = image_file.read(4)
-            # self.raw_images[y,x,n] = self.raw_images[y,x,n] + struct.unpack('>f',b)[0]
-            # b = image_file.read(4)
-            # self.raw_images[y,x,n] = self.raw_images[y,x,n] + struct.unpack('>f',b)[0]
-            # self.raw_images[y,x,n] = self.raw_images[y,x,n] / 3
-
-            x = x + 1
-
-            # New row or break at end
-            if x > x_size - 1:
-                x = 0
-                y = y + 1
-                if y > y_size - 1:
-                    break
-
-            # Shift to next RGB triplet
-            b = image_file.read(8)
-
-        image_file.close()
-
-    # self.raw_images = (self.raw_R + self.raw_G + self.raw_B) / 3
-
-    # CREATE FILE WITH ALL DATA
-    # np.save("frames/" + testName + "/" + testName + "_R.npy",self.raw_R)
-    # np.save("frames/" + testName + "/"  + testName + "_G.npy",self.raw_G)
-    # np.save("frames/" + testName + "/"  + testName + "_B.npy",self.raw_B)
-    # np.save("frames/" + testName + "/"  + testName + "_ABR.npy",self.raw_images)
-    print("File saved!")
 
     return raw_images

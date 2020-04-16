@@ -1,3 +1,4 @@
+import numpy as np
 import parse
 import sys
 import os
@@ -15,7 +16,7 @@ def readinConfig():
     return config_directory
 
 
-def IsNotInt(s):
+def isNotInt(s):
     try:
         int(s)
         return False
@@ -34,7 +35,7 @@ def readinFrameRate(test_name=""):
         return int(frame_rate_str)
 
     except FileNotFoundError:
-        print("FAILED TO READ IN FRAME RATE FOR LOG FILE")
+        print("FAILED TO READ IN FRAME RATE FROM LOG FILE")
 
         while True:
             frame_rate_str = input("Pls insert frame rate (suggested 2000): \n\n")
@@ -45,6 +46,33 @@ def readinFrameRate(test_name=""):
             except ValueError:
                 pass
 
+def readinFlightTrajectory(test_name=""):
+    fli_file = open("frames/" + test_name + "/test_traj.fli")
+
+    # Read lines until you reach trajectory
+    while True:
+        junk_line = fli_file.readline()
+        if junk_line == "view craft\n":
+            junk_line = fli_file.readline()
+            break
+
+    # Read in trajectory
+    trajectory = []
+    idx = 0
+
+    while True:
+        str_position = fli_file.readline()
+        packet = str_position.split()[1:7]
+        idx += 1
+
+        if len(packet) > 0:
+            trajectory.append(packet)
+        else:
+            break
+
+    fli_file.close()
+
+    return np.array(trajectory).astype(float)
 
 class ProgressTracker:
 
