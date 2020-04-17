@@ -1,0 +1,3 @@
+[submodule "event-based-vision"]
+	path = event-based-vision
+	url = https://gitlab.com/EuropeanSpaceAgency/event-based-vision.git
