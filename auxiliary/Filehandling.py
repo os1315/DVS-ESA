@@ -26,7 +26,7 @@ def isNotInt(s):
 
 def readinFrameRate(test_name=""):
     try:
-        fli_file = open("frames/" + test_name + "/test_traj.fli")
+        fli_file = open("test_traj.fli")
         first_str = fli_file.readline()
 
         frame_rate_str = parse.search("# Frame rate: {:d}\n", first_str)[0]
@@ -46,8 +46,9 @@ def readinFrameRate(test_name=""):
             except ValueError:
                 pass
 
+
 def readinFlightTrajectory(test_name=""):
-    fli_file = open("frames/" + test_name + "/test_traj.fli")
+    fli_file = open("test_traj.fli")
 
     # Read lines until you reach trajectory
     while True:
@@ -73,6 +74,7 @@ def readinFlightTrajectory(test_name=""):
     fli_file.close()
 
     return np.array(trajectory).astype(float)
+
 
 class ProgressTracker:
 

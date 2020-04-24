@@ -13,11 +13,9 @@ from testBench import TestBench
 from auxiliary.Filehandling import readinConfig
 
 
-TB = TestBench("constDescent4", target_dir=readinConfig())
+TB = TestBench("constDescent3", target_dir=readinConfig())
 
-run_module = True
-
-while run_module:
+while True:
 
     print("\nNext command?\n\tr - reload images \n\ti - process images \n\tv - play processed images \n\tp - process "
           "& play \n\tt - play raw\n\tn - exit")
@@ -55,7 +53,7 @@ while run_module:
             TB.playImport(int(cap))
 
     elif echo == 'N' or echo == 'n':
-        run_module = False
+        break
 
     elif echo == 'T' or echo == 't':
         TB.playRaw()

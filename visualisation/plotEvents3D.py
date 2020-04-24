@@ -8,9 +8,9 @@ import os
 import sys
 import parse
 
-test_tag = "/constDescent4"
+test_tag = "/constDescent6"
 
-str_address = "C:/PANGU/PANGU_5.00/models/lunar_OFlanding/frames" + test_tag + "/eventlist.txt"
+str_address = "C:/PANGU/PANGU_5.00/models/lunar_OFlanding/frames" + test_tag + "/eventlist_100.txt"
 # str_address = "test.txt"
 
 event_file = open(str_address, 'r')
@@ -36,14 +36,14 @@ while True:
 
 data = np.array(all_packets)
 
-data[:, 2] = data[:, 2]/1000
+# data[:, 2] = data[:, 2]/1000
 
 print('This data set contains {} data points'.format(data.shape[0]))
 
 
 # Select section
 beg = 0
-end = 2000000
+end = 250000
 subset = data[np.where((data[:, 2] < end) & (data[:, 2] > beg))]
 
 # Split according to polarity
@@ -51,14 +51,16 @@ subset_neg = subset[subset[:, 3] == -1]
 subset_pos = subset[subset[:, 3] == 1]
 
 # Decimation factor
-dec_fac = 1
+dec_fac = 2
 
 # Plot
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
 
-ax.scatter(subset_neg[::dec_fac, 0], subset_neg[::dec_fac, 1], subset_neg[::dec_fac, 2])
-ax.scatter(subset_pos[::dec_fac, 0], subset_pos[::dec_fac, 1], subset_pos[::dec_fac, 2])
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+ax.scatter(subset_neg[::dec_fac, 0], subset_neg[::dec_fac, 1], subset_neg[::dec_fac, 2], s=1)
+
+# ax = fig.add_subplot(1, 2, 2, projection='3d')
+# ax.scatter(subset_pos[::dec_fac, 0], subset_pos[::dec_fac, 1], subset_pos[::dec_fac, 2], s=1)
 
 
 ax.set_xlabel('x pixel')
