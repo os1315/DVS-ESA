@@ -80,7 +80,7 @@ fi
   -flight test_traj.fli \
   -movie \
   -image_format float \
-  -savefmt "frames/${NEW_FILE}/raw_bright/${NEW_FILE}_%03d" \
+  -savefmt "frames/${NEW_FILE}/raw_bright/${NEW_FILE}_%05d" \
   -quit \
   model.pan \
   \
@@ -127,7 +127,7 @@ mkdir $NEW_PATH
   -flight test_traj.fli \
   -movie \
   -image_format float \
-  -savefmt "frames/${NEW_FILE}/raw_dim/${NEW_FILE}_%03d" \
+  -savefmt "frames/${NEW_FILE}/raw_dim/${NEW_FILE}_%05d" \
   -quit \
   model.pan \
   \
