@@ -171,3 +171,29 @@ class TestBench:
         except Exception as e:
             print("\n\nIMPORT FAILED! -> Visualising\n")
             print(traceback.format_exc() + '\n')
+
+
+if __name__ == "__main__":
+    # Automates data set generation
+
+    import time
+    from auxiliary.Filehandling import readinConfig
+
+    TB = TestBench("constDescent6", target_dir=readinConfig())
+
+    theta_list = [0.4, 0.5, 1.0]
+    label_list = ["/eventlist_" + f'{t * 100:03.0f}' for t in theta_list]
+
+    runtimes = []
+
+    for t, label in zip(theta_list, label_list):
+        print("Current test: ", label)
+        time_now = time.time()
+        TB.processImages(event_file_name=label, theta=t)
+        runtimes.append((time.time() - time_now) / 60)
+        print()
+
+    print("Run times:")
+
+    for label, rt in zip(label_list, runtimes):
+        print(f'{label[1:]}: {rt:.1f} min')

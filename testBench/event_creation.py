@@ -188,12 +188,10 @@ def convertFromCompound(testName, x_size, y_size, frames):
         subset = raw_R[:, :, image]
         padding = np.min(subset[np.nonzero(subset[:, :])]) * 100  # Arbitrarily decided what the padding is
 
-        print("\nPadding: ", padding)
         raw_R[:, :, image] = raw_R[:, :, image] + padding
         raw_G[:, :, image] = raw_G[:, :, image] + padding
         raw_B[:, :, image] = raw_B[:, :, image] + padding
         raw_images[:, :, image] = raw_images[:, :, image] + padding
-        print("Min value: ", np.min(raw_images[:, :, image]))
 
     tracker.complete("Saving...")
 

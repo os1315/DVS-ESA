@@ -4,6 +4,14 @@ import sys
 import os
 
 
+def isNotInt(s):
+    try:
+        int(s)
+        return False
+    except ValueError:
+        return True
+
+
 def readinConfig():
     try:
         config_file = open("config.txt")
@@ -14,14 +22,6 @@ def readinConfig():
     config_file.close()
 
     return config_directory
-
-
-def isNotInt(s):
-    try:
-        int(s)
-        return False
-    except ValueError:
-        return True
 
 
 def readinFrameRate(test_name=""):
@@ -48,7 +48,7 @@ def readinFrameRate(test_name=""):
 
 
 def readinFlightTrajectory(test_name=""):
-    fli_file = open("test_traj.fli")
+    fli_file = open("frames/" + test_name + "/test_traj.fli")
 
     # Read lines until you reach trajectory
     while True:
@@ -77,18 +77,21 @@ def readinFlightTrajectory(test_name=""):
 
 
 class ProgressTracker:
+    """
+    Use to print out progress message to cmd prompt
+    """
 
-    def __init__(self, total_items):
+    def __init__(self, total_items: int):
         self.percentage = 1
         self.total_items = total_items
 
-    def update(self, state):
+    def update(self, state: int) -> None:
         if state > self.percentage * self.total_items / 100:
             sys.stdout.write('\rProgress: {:d}%'.format(self.percentage))
             sys.stdout.flush()
             self.percentage = self.percentage + 1
 
-    def complete(self, message=None):
+    def complete(self, message: str = None) -> None:
         sys.stdout.write('\rProgress: {:d}% ---> '.format(100))
         sys.stdout.flush()
         if message is not None:

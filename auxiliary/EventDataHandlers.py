@@ -2,13 +2,13 @@ import numpy as np
 import parse
 
 
-def readEventList(str_address):
+def readEventList(str_address: str) -> np.ndarray:
     """Reads in an event list file and returns a numpy array with the events"""
 
     event_file = open(str_address, 'r')
 
     # First line is not a point
-    str_event = event_file.readline()
+    _str_event = event_file.readline()
 
     # #TODO: Insert a try except to detect corrupt files (?)
 
@@ -33,7 +33,7 @@ def readEventList(str_address):
     return np.array(all_packets)
 
 
-def splitByPolarity(event_data):
+def splitByPolarity(event_data: np.ndarray) -> (np.ndarray, np.ndarray):
     pos_polarity = []
     neg_polarity = []
 

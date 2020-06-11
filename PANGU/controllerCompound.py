@@ -44,7 +44,7 @@ class TestContainer:
         test_name = "\ntest" + str(count) + ";"
         chunk1 = "\t\nEXP1: " + str(self.param_bright[0]) + "; QE1: " + str(self.param_bright[1]) + "; BIAS1: " + str(self.param_bright[2])
         chunk2 = "; GAIN1: " + str(self.param_bright[3]) + "; RMS1: " + str(self.param_bright[4]) + "; DC1: " + str(self.param_bright[5]) + ";"
-        chunk3 = "\t\nEXP2: " + str(self.param_dim[0]) + "; QE2: " + str(self.param_dim[2]) + "; BIAS2: " + str(self.param_dim[1])
+        chunk3 = "\t\nEXP2: " + str(self.param_dim[0]) + "; QE2: " + str(self.param_dim[1]) + "; BIAS2: " + str(self.param_dim[2])
         chunk4 = "; GAIN2: " + str(self.param_dim[3]) + "; RMS2: " + str(self.param_dim[4]) + "; DC2: " + str(self.param_dim[5]) + ";"
 
         return test_name + chunk1 + chunk2 + chunk3 + chunk4
@@ -61,7 +61,7 @@ target_dir = readinConfig()
 bashCommand = "./shell/compound.sh"
 
 #  Name of test
-testName = "/constDescent"
+testName = "/sineHover"
 
 
 # Container for all tests

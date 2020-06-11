@@ -1,15 +1,18 @@
 import math
 import os
+import statistics
 from time import time
 
 import numpy as np
-from numpy import array, transpose, matmul, mean, sum, square, concatenate
+from matplotlib.patches import Circle
+from numpy import array, transpose, matmul, sum, square, concatenate
 
 import numpy.linalg as npl
 
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from mpl_toolkits.mplot3d import Axes3D
+
+import scipy.ndimage as ndi
 
 from collections import deque
 
@@ -18,35 +21,19 @@ import Filehandling
 from Filehandling import readinConfig
 
 
-class DivergenceEstimator:
-
-    # This intends to be a base class for all estimators that I come up with or wish to test
-
-    # WHAT SHOULD IT DO?
-    # 1. Have a "return Divergence" method
-    # 2. Have an update method
-    # 3. Have a backdoor/reset method? (That might be better to do for individual inherited classes
-
-    def __del(self):
-        pass
-
-    def update(self, data):
-        pass
-
-    # This should compute the divergence from all vectors
-    def returnDiv(self):
-        pass
-
-
 class LocalPlaneEstimator:
     """This class implements the Local Planes version of Optic Flow estimation"""
 
-    def __init__(self, mode: str, x_size: int, y_size: int, dt: int = 20, dx: int = 3, min_points: int = 3, th1: float = 1 / 10000, th2: float = 0.7):
+    # TODO: Normalize by the number of vectors considered for estimation.
+    #  For a sparse optic flow field the div mask will get weird results when zeros are plugged around vector clusters?
+
+    def __init__(self, mode: str, x_size: int, y_size: int, dt: int = 20, dx: int = 3, min_points: int = 3,
+                 th1: float = 1 / 10000, th2: float = 0.7):
 
         # Spaciotemporal neighbourhood parameters
         self.th1 = th1
         self.th2 = th2
-        self.bin_num = None
+        self.bin_num = 10  # Totally arbitrary
         self.dt = dt
         self.dx = dx
 
@@ -56,7 +43,7 @@ class LocalPlaneEstimator:
         # Minimum number of points in neighbourhood for fitting
         self.min_points = min_points
 
-        # TODO: Do I really need event_count as attribute? Its seem confined to update, check if state carries over.
+        # Do I really need event_count as attribute? Its seem confined to update, check if state carries over.
         self.event_count = 0
         self.latest_event_time = None
 
@@ -68,14 +55,15 @@ class LocalPlaneEstimator:
         self.relevant_points = deque()
         self.div_mask = self.generateDivMask()
 
-        # TODO: Should be initialised as np.array
+        # Should be initialised as np.array
         self.flow_vectors = None
 
-        # TODO: Managing instances of figures, how to do that elegantly?
+        # Managing instances of figures, how to do that elegantly?
         self.figure_dict = {}
 
     def __repr__(self):
-        return "<Test th1:%s th2:%s min_points:%s dx:%s dt:%s bin_num:%s>" % (self.th1, self.th2, self.min_points, self.dx, self.dt, self.bin_num)
+        return "<Test th1:%s th2:%s min_points:%s dx:%s dt:%s bin_num:%s>" % (
+            self.th1, self.th2, self.min_points, self.dx, self.dt, self.bin_num)
 
     def __str__(self):
 
@@ -96,7 +84,7 @@ class LocalPlaneEstimator:
 
         return rtn
 
-    # TODO: CALLING THIS FOR EVERY POINT IS A BAD IDEA, ADD SOME GROUPING
+    # EXTODO: CALLING THIS FOR EVERY POINT IS A BAD IDEA, ADD SOME GROUPING
     def update(self, event_batch: np.array, echo: bool = False) -> list:
 
         for n in range(event_batch.shape[0]):
@@ -134,7 +122,7 @@ class LocalPlaneEstimator:
         # Now apply local plane fit
         self.flow_vectors = self.localPlaneFit()
 
-        # TODO: flow vectors should be stored in object and tracked by temporal relevance, similarly to incoming points
+        # flow vectors should be stored in object and tracked by temporal relevance, similarly to incoming points
         return self.flow_vectors
 
     def localPlaneFit(self) -> np.array:  # -> list[int, int, int, int, int]:
@@ -259,7 +247,7 @@ class LocalPlaneEstimator:
         vector_cleaned = input_vectors[~np.isnan(norms) & ~np.isinf(norms)]
 
         norms_cleaned = npl.norm(vector_cleaned[:, 3:], axis=1)
-        hist, bin_edges = np.histogram(norms_cleaned, bins=10)
+        hist, bin_edges = np.histogram(norms_cleaned, bins=self.bin_num)
         # filtered_vectors = vector_cleaned[(norms_cleaned < bin_edges[1])]
 
         # filtered_vectors = input_vectors[~np.isnan(norms) & ~np.isinf(norms) & (norms < bin_edges[1])]
@@ -272,7 +260,7 @@ class LocalPlaneEstimator:
 
         if visualise:
             centers = [(bin_edges[idx] + bin_edges[idx + 1]) / 2 for idx in range(len(bin_edges) - 1)]
-            plt.bar(centers, hist, align='center', width=bin_edges[1]-bin_edges[0])
+            plt.bar(centers, hist, align='center', width=bin_edges[1] - bin_edges[0])
             plt.pause(0.5)
 
         return filtered_vectors
@@ -311,7 +299,7 @@ class LocalPlaneEstimator:
 
     def generateDivMask(self, M: int = None, N: int = None, showmask: bool = False) -> np.array:
 
-        # TODO: Check that this mask is properly generated and to element-wise dot product with vector field.
+        # Check that this mask is properly generated and to element-wise dot product with vector field.
 
         if M is not None:
             m = M
@@ -336,268 +324,1000 @@ class LocalPlaneEstimator:
 
         return mask
 
+    ### BELOW IS TEST AND DEV CODE ###########################################################################
 
-### BELOW IS TEST AND DEV CODE ###########################################################################
+    @staticmethod
+    def createData():
+        N_POINTS = 20
+        TARGET_X_SLOPE = 2
+        TARGET_y_SLOPE = 3
+        TARGET_OFFSET = 5
+        EXTENTS = 50
+        NOISE = 10
 
-def createData():
-    N_POINTS = 20
-    TARGET_X_SLOPE = 2
-    TARGET_y_SLOPE = 3
-    TARGET_OFFSET = 5
-    EXTENTS = 50
-    NOISE = 10
+        # Error REG with seed=111 is 5.145704395479834
+        np.random.seed(111)
 
-    # Error REG with seed=111 is 5.145704395479834
-    np.random.seed(111)
+        # create random data
+        xs = [np.random.uniform(2 * EXTENTS) - EXTENTS for i in range(N_POINTS)]
+        ys = [np.random.uniform(2 * EXTENTS) - EXTENTS for i in range(N_POINTS)]
+        zs = []
+        for i in range(N_POINTS):
+            zs.append(xs[i] * TARGET_X_SLOPE + \
+                      ys[i] * TARGET_y_SLOPE + \
+                      TARGET_OFFSET + np.random.normal(scale=NOISE))
 
-    # create random data
-    xs = [np.random.uniform(2 * EXTENTS) - EXTENTS for i in range(N_POINTS)]
-    ys = [np.random.uniform(2 * EXTENTS) - EXTENTS for i in range(N_POINTS)]
-    zs = []
-    for i in range(N_POINTS):
-        zs.append(xs[i] * TARGET_X_SLOPE + \
-                  ys[i] * TARGET_y_SLOPE + \
-                  TARGET_OFFSET + np.random.normal(scale=NOISE))
+        return transpose(array([xs, ys, zs])), EXTENTS
 
-    return transpose(array([xs, ys, zs])), EXTENTS
+    # TESTSCRIPT
+    @staticmethod
+    def splitLevelsAndFit(data, estimator_instance, plot=False):
+        """Roughly splits data set into slices along z-axis and performs separate fits on all of them"""
 
+        # If this is still useful, change so it plots/returns its own plots
 
-# TESTSCRIPT
-def splitLevelsAndFit(data, estimator_instance, plot=False):
-    """Roughly splits data set into slices along z-axis and performs separate fits on all of them"""
+        # Length of section along z
+        DELTA = 40
 
-    # TODO: If this is still useful, change so it plots/returns its own plots
+        # Extract mean and state
+        level = np.min(data[:, 2]) + DELTA / 2
+        slice_count = 10
 
-    # Length of section along z
-    DELTA = 40
+        # Storage for fit results
+        all_fits = np.zeros([slice_count, 2])
 
-    # Extract mean and state
-    level = np.min(data[:, 2]) + DELTA / 2
-    slice_count = 10
+        if plot:
+            # Plot
+            plt.figure()
+            ax = plt.subplot(111, projection='3d')
+            colors = cm.rainbow(np.linspace(0, 1, slice_count))
 
-    # Storage for fit results
-    all_fits = np.zeros([slice_count, 2])
+        for n in range(slice_count):
 
-    if plot:
-        # Plot
-        plt.figure()
-        ax = plt.subplot(111, projection='3d')
-        colors = cm.rainbow(np.linspace(0, 1, slice_count))
+            data_slice = LocalPlaneEstimator.takeSlice(data, level + n * DELTA, DELTA)
 
-    for n in range(slice_count):
+            if data_slice.shape[0] > 2:
+                # Sort the slice, since that is how the data would normally look like
+                data_slice = data_slice[data_slice[:, 2].argsort()]
+                all_fits[n, :] = estimator_instance.update(data_slice)[0][3:5]
+                if plot:
+                    ax.scatter(data_slice[:, 0], data_slice[:, 1], data_slice[:, 2], color=colors[n, :])
+            else:
+                print("No points to fits, section: ", n)
 
-        data_slice = takeSlice(data, level + n * DELTA, DELTA)
+        ideal = np.ones([slice_count, 2])
+        ideal[:, 0] = ideal[:, 0] * 2
+        ideal[:, 1] = ideal[:, 1] * 3
+        error = np.sqrt(np.mean(np.square(all_fits - ideal)))
 
-        if data_slice.shape[0] > 2:
-            # Sort the slice, since that is how the data would normally look like
-            data_slice = data_slice[data_slice[:, 2].argsort()]
-            all_fits[n, :] = estimator_instance.update(data_slice)[0][3:5]
-            if plot:
-                ax.scatter(data_slice[:, 0], data_slice[:, 1], data_slice[:, 2], color=colors[n, :])
+        for n in range(slice_count):
+            print('dx/dt {}, dy/dt: {}'.format(all_fits[n, 0], all_fits[n, 1]))
+
+        print('Error {}: {}'.format(estimator_instance.mode, error))
+
+        if plot:
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_zlabel('z')
+            plt.show()
+
+    # TESTSCRIPT
+    @staticmethod
+    def splitLocallyAndFit(data, estimator_instance, plot=False, coor=None, title=""):
+        """TEST SCRIPT: Roughly splits data set into slices along z-axis and performs separate fits on all of them"""
+
+        # If this is still useful, change so it plots/returns its own plots
+
+        # Length of section along z
+        DELTA = estimator_instance.dt
+
+        # Extract mean and state
+        level = np.min(data[:, 2]) + DELTA / 2
+        slice_count = 300
+
+        # Storage for fit results
+        all_fits = []
+
+        if plot:
+            # Plot
+            if coor is None:
+                ax = fig.add_subplot(1, 2, 1, projection='3d')
+            else:
+                ax = fig.add_subplot(coor[0], coor[1], coor[2], projection='3d')
+            colors = cm.rainbow(np.linspace(0, 1, slice_count))
+
+        for n in range(slice_count):
+
+            data_slice = LocalPlaneEstimator.takeSlice(data, level + n * DELTA, DELTA)
+
+            if data_slice.shape[0] > 2:
+                # Sort the slice, since that is how the data would normally look like
+                data_slice = data_slice[data_slice[:, 2].argsort()]
+                all_fits.append(estimator_instance.update(data_slice))
+                if plot:
+                    ax.scatter(data_slice[:, 0], data_slice[:, 1], data_slice[:, 2], color=colors[n, :], s=2)
+            else:
+                print("No points to fits, section: ", n)
+
+        all_fits_array = None
+
+        for sub_list in all_fits:
+
+            if len(sub_list) > 0:
+                if all_fits_array is None:
+                    all_fits_array = array(sub_list)
+                else:
+                    all_fits_array = concatenate((all_fits_array, array(sub_list)))
+                print("")
+
+        ideal = array([2, 3])
+        error = array([0, 0])
+
+        for n in range(all_fits_array.shape[0]):
+            a = all_fits_array[n, 3:5]
+            error = error + square(all_fits_array[n, 3:5] - ideal)
+            print('dx/dt" {}, dy/dt: {}'.format(all_fits_array[n, 3], all_fits_array[n, 4]))
+
+        print('Error {}: {}'.format(estimator_instance.mode, sum(error / all_fits_array.shape[0])))
+
+        if plot:
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_zlabel('z')
+
+            if coor is None:
+                ax = fig.add_subplot(1, 2, 2)
+            else:
+                ax = fig.add_subplot(coor[0], coor[1], coor[2] + 1)
+            ax.quiver(all_fits_array[:, 0], all_fits_array[:, 1], all_fits_array[:, 3], all_fits_array[:, 4])
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_title(title)
+
+    # TESTSCRIPT
+    @staticmethod
+    def SVDregQuiver(event_list=None, settings=None, plot=False):
+        print("TESTSCRIPT: Running SVDregQuiver...")
+
+        if event_list is None:
+            tar_dir = readinConfig()
+            event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/constDescent6/eventlist_050.txt"))
+            print("Loaded data...")
         else:
-            print("No points to fits, section: ", n)
+            print("Data passed in!")
 
-    ideal = np.ones([slice_count, 2])
-    ideal[:, 0] = ideal[:, 0] * 2
-    ideal[:, 1] = ideal[:, 1] * 3
-    error = np.sqrt(np.mean(np.square(all_fits - ideal)))
+        delta = 1000
+        start_at_t0 = 1000
+        start = start_at_t0
+        end = start_at_t0 + delta
 
-    for n in range(slice_count):
-        print('dx/dt {}, dy/dt: {}'.format(all_fits[n, 0], all_fits[n, 1]))
+        instance = LocalPlaneEstimator('SVDreg', 128, 128, dx=settings['dx'], dt=settings['dt'])
+        print('')
+        print(instance)
 
-    print('Error {}: {}'.format(estimator_instance.mode, error))
+        div_estimates = []
 
-    if plot:
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
+        if plot:
+            fig1 = plt.figure()
+
+            ax = fig1.add_subplot(1, 1, 1, projection='3d')
+            ax.set_xlabel('x pixel')
+            ax.set_ylabel('y pixel')
+            ax.set_zlabel('time [ms]')
+
+            ax1 = fig1.add_subplot(1, 1, 1)
+            ax1.set_xlabel('x')
+            ax1.set_ylabel('y')
+            ax1.set_title(f'Vector field on slice between {start / 1000}[s] and {end / 1000}[s]')
+
+        while end < event_list[event_list.shape[0] - 1, 2]:
+            sub_list = event_list[(start < event_list[:, 2]) & (event_list[:, 2] < end), :]
+
+            subset_neg = sub_list[sub_list[:, 3] == -1]
+            subset_pos = sub_list[sub_list[:, 3] == 1]
+
+            # print("Is sorted: ", np.all(True == (np.diff(subset_neg[:, 2]) <= 0)))
+            # print("Is sorted: ", np.all(True == (np.diff(subset_neg[:, 2]) >= 0)))
+
+            vectors = instance.update(subset_neg)
+            vectors = np.array(vectors)
+
+            div_estimates.append(instance.returnDiv())
+
+            # subset_neg = subset_neg[(0 < subset_neg[:, 0]) & (subset_neg[:, 0] < 20)]
+            # subset_neg = subset_neg[(110 < subset_neg[:, 1]) & (subset_neg[:, 1] < 128)]
+
+            if plot:
+                # Clear graphs
+                ax.clear()
+                ax1.clear()
+
+                ax.scatter(subset_neg[:, 0], subset_neg[:, 1], subset_neg[:, 2], s=1)
+                ax1.quiver(vectors[:, 0], vectors[:, 1], vectors[:, 3], vectors[:, 4])
+
+                plt.pause(0.1)
+
+            # Progress to next slice, CANNOT OVER LAP WITH PREVIOUS SLICE
+            start = start + delta
+            end = start + delta
+            print(f'\nNew limits: {start} - {end}')
+
+            # _temp = input("next slice?")
+
+        xIDX = [10 * a + start_at_t0 / 100 for a in range(len(div_estimates))]
+        div_estimates = [d / 10000 for d in div_estimates]
+
+        return xIDX, div_estimates
+
+    # TESTSCRIPT
+    @staticmethod
+    def performanceAssessment(save=True):
+
+        ## Parameter space:
+        test_points = []
+        # Vary time
+        test_points.append({'dt': 2000, 'dx': 3, 'min_points': 3, 'th1': 0.0001, 'th2': 0.7})
+        test_points.append({'dt': 5000, 'dx': 3, 'min_points': 3, 'th1': 0.0001, 'th2': 0.7})
+
+        ## The heavy lifting aka actual calculations
+        # Load in events
+        tar_dir = readinConfig()
+        event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/constDescent6/eventlist_050.txt"))
+
+        all_results = []
+
+        for iter, test in enumerate(test_points):
+            try:
+                Didx, D = LocalPlaneEstimator.SVDregQuiver(event_list=event_list, settings=test, plot=False)
+
+                all_results.append((Didx, D))
+
+                if save:
+                    # Save for every test point in case it goes to hell
+                    file_stream = open(tar_dir + f'/frames/constDescent6/' + f'test{iter + 5}.txt', 'w')
+                    file_stream.write(
+                        f'dt: {test["dt"]}, dx: {test["dx"]}, min_points: {test["min_points"]}, th1: {test["th1"]}, th2: {test["th2"]}\n')
+                    for i, d in zip(Didx, D):
+                        file_stream.write(f'{i},{d}\n')
+                    file_stream.close()
+            except Exception as e:
+                print(e)
+
+        ## Plotting:
+        # load trajectory file
+        test_tag = "constDescent6"
+
+        old = os.getcwd()
+        os.chdir(tar_dir)
+        frame_rate = Filehandling.readinFrameRate(test_tag)
+        trajectory = Filehandling.readinFlightTrajectory(test_tag)[:, 2]
+        os.chdir(old)
+
+        trajectory = trajectory[1:trajectory.shape[0]]
+
+        D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
+        D_true = D_true * frame_rate
+
+        # Plot
+        fig_perf, ax_line = plt.subplots()
+        ax_line.plot(range(D_true.shape[0]), D_true)
+
+        for test, result in zip(test_points, all_results):
+            ax_line.plot(result[0], result[1],
+                         label=f'dt: {test["dt"]}, dx: {test["dx"]}, min_points: {test["min_points"]}, th1: {test["th1"]}, th2: {test["th2"]}')
+
+        plt.show()
+
+    # TESTSCRIPT
+    @staticmethod
+    def plotLocalPlanesEstimatorPerformanceResults(test_label: str):
+
+        import os
+
+        tar_dir = readinConfig()
+        tar_dir = tar_dir + "/frames/" + test_label + "/LocalPlanes_test/"
+        labels = []
+        data_sets = []
+
+        # Read in data
+        files_list = os.listdir(tar_dir)
+        for file in files_list:
+            stream = open(tar_dir + file, 'r')
+            labels.append(stream.readline())
+            T = []
+            D = []
+            while True:
+                try:
+                    t, d = stream.readline().split(',')
+                    T.append(float(t))
+                    D.append(float(d[:-1]))
+                except ValueError:
+                    break
+            data_sets.append([T, D])
+
+        fig, ax = plt.subplots()
+        # plt.show()
+        for l, data in zip(labels, data_sets):
+            ax.plot(data[0], data[1], label=l[:-1])
+
+        # Add ground truth:
+        test_tag = "constDescent6"
+
+        old = os.getcwd()
+        os.chdir(readinConfig())
+        frame_rate = Filehandling.readinFrameRate(test_tag)
+        trajectory = Filehandling.readinFlightTrajectory(test_tag)[:, 2]
+        os.chdir(old)
+
+        trajectory = trajectory[1:trajectory.shape[0]]
+        D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
+        D_true = D_true * frame_rate
+
+        ax.plot(range(D_true.shape[0]), D_true, c=[0, 0, 0], label='Ground truth')
+
+        ax.set_title('Performance of local planes divergence estimator with various parameter settings')
+        ax.legend()
+        plt.show()
+
+    @staticmethod
+    def takeSlice(data, level, delta):
+        selected_points = []
+        A = level - delta / 2
+        C = level + delta / 2
+
+        for n in range(data.shape[0]):
+            if level - delta / 2 <= data[n, 2] < level + delta / 2:
+                selected_points.append(data[n, :])
+
+        return np.array(selected_points)
+
+
+class MeanShiftSingleEstimator:
+    """
+    This class inplements a divergence estimator based on divergence of features on the optic plane, hence sparse 
+    optic flow estimation of
+    """
+
+    # TODO: Using transversely located centroids for estimation
+
+    def __init__(self, x_size, y_size,
+                 tau=3000,
+                 min_points=15,
+                 min_features=5,
+                 r=4,
+                 centroid_seperation=0.05,
+                 time_dimension=1000):
+
+        ## STATIC ATTRIBUTES
+        # Maxima finding parameters
+        self.min_points = min_points
+        self.min_features = min_features
+        self.kernal = self.buildKernal(r)
+
+        # Mean shift parameters
+        self.centroid_range = r
+
+        # Divergence estimation parameters
+        self.centroid_seperation = centroid_seperation
+        self.time_dimension = time_dimension
+
+        # Camera parameters
+        self.x_size = x_size
+        self.y_size = y_size
+
+        ## DYNAMIC ATTRIBUTES
+        # Time
+        self.previous_call = 0
+
+        # Event management
+        self.relevant_points = deque()
+        self.tau = tau
+
+        # Centroid management
+        self.centroid_count = 0
+        self.centroids_OLD = None
+        self.centroids_NEW = None
+
+    def __str__(self):
+
+        def spc(n):
+            s = ''
+            if n < 0:
+                return s
+            for i in range(n):
+                s = s + ' '
+            return s
+
+        static_HEADER = f'STATIC PARAMETERS\n'
+        static_param_str = f'Param: min_points | min_features | centroid_range |' \
+                           f' centroid_seperation | time_dimension\n'
+
+        spc_list = [len(x) for x in static_param_str[7:-2].split(' | ')]
+
+        static_value_str = f'Value:' \
+                           f' {self.previous_call}{spc(spc_list[0]-len(str(self.previous_call)))} |' \
+                           f' {self.min_features}{spc(spc_list[1]-len(str(self.min_features)))} |' \
+                           f' {self.centroid_range}{spc(spc_list[2]-len(str(self.centroid_range)))} |' \
+                           f' {self.centroid_seperation}{spc(spc_list[3]-len(str(self.centroid_seperation)))} |' \
+                           f' {self.time_dimension}{spc(spc_list[4]-len(str(self.time_dimension)))}'
+
+        rtn = static_HEADER + static_param_str + static_value_str + '\n\n'
+
+        dynamic_HEADER = f'DYNAMIC PARAMETERS\n'
+        dynamic_param_str = f'Param: time | stored_points | tau   | tracked centroids\n'
+
+        spc_list = [len(x) for x in dynamic_param_str[7:-2].split(' | ')]
+
+        dynamic_value_str = f'Value:' \
+                            f' {self.min_points}{spc(spc_list[0]-len(str(self.min_points)))} |' \
+                            f' {len(self.relevant_points)}{spc(spc_list[1]-len(str(len(self.relevant_points))))} |' \
+                            f' {self.tau}{spc(spc_list[2]-len(str(self.tau)))} |' \
+                            f' {self.time_dimension}{spc(spc_list[3]-len(str(self.time_dimension)))}'
+
+        rtn = rtn + dynamic_HEADER + dynamic_param_str + dynamic_value_str
+
+        return rtn
+
+    def update(self, event_batch: np.array, time_now: float) -> float:
+        """
+        Top level logic of the estimator. Particular phases are broken down into subroutines.
+
+        :param time_now:
+        :param event_batch: np.array
+        :return D: float
+        """
+
+        self.discardOldEvents(event_batch)
+
+        # With the exception of the first call the method always begins with shifting centroids to new positions
+        if self.centroids_OLD is not None:
+            self.meanShift()
+
+            # Standard scenario, just extract div, toss out invalid centroids and return div
+            if self.centroid_count > self.min_features:
+                D = self.estimateDivergence(dt=time_now - self.previous_call)
+                self.updateCentroids()
+                print("normal")
+                rtn = D
+            # Case that ALL centroids failed to converge, no div can be estimated (hence 0) and new have to be regenerated
+            elif self.centroid_count < 1:
+                self.findMaxima()
+                print("no div")
+                rtn = 0
+            # Based on the few centroids left the div can be estimated at this point, but new are regenerated afterwards
+            else:
+                D = self.estimateDivergence(dt=time_now - self.previous_call)
+                self.findMaxima()
+                print("regen")
+                rtn = D
+
+        else:
+            self.findMaxima()
+            rtn = 0
+
+        # Finish with updating time and returning divergance
+        self.previous_call = time_now
+        return rtn
+
+    def discardOldEvents(self, event_batch: np.array, echo: bool = False) -> None:
+        """
+        Puts the new batch to container and discards events that are too old.
+
+        :param event_batch:
+        :param echo: Toggles on echo to terminal to debug.
+        :return:
+        """
+        event_count = 0
+
+        for n in range(event_batch.shape[0]):
+            self.relevant_points.append(event_batch[n, :])
+            event_count += event_batch.shape[0]
+
+        latest_event_time = event_batch[event_batch.shape[0] - 1][2]  # Could be also last from self.relevant_points
+
+        if echo:
+            print("Batch size: ", len(event_batch))
+            print(
+                f'First / last: {latest_event_time} / {self.relevant_points[0][2]}  ->  {latest_event_time - self.relevant_points[0][2]}')
+            print("Relevant points: ", len(self.relevant_points))
+
+        # Search for old points to remove
+        deque_ptr = 0
+        while self.relevant_points[deque_ptr][2] < latest_event_time - self.tau:
+            deque_ptr += 1
+
+        # Update counter of points
+        event_count -= deque_ptr
+
+        if echo:
+            print("Points for removal: ", deque_ptr)
+            print("Expected:", len(self.relevant_points) - deque_ptr)
+
+        # Remove old points
+        while deque_ptr > 0:
+            self.relevant_points.popleft()
+            deque_ptr += -1
+
+        if echo:
+            print("After removal:", len(self.relevant_points))
+
+    def meanShift(self) -> None:
+        """
+        Assigns all points to nearest centroid as long at its within self.r distance from it and updates centroid
+        location. Runs interatively through all points until all centroids converge or are discarded as invalid.
+        Assigns previous centroids to self.centroids_OLD and new centroids to self.centroids_NEW.
+
+        :return:
+        """
+
+        centroid_count = self.centroid_count
+        # Build matrix of [newX, newY, oldX, oldY, clusteredPoints]
+        centroids = np.zeros([centroid_count, 5])
+        centroids[:, :2] = np.zeros([centroid_count, 1])
+        centroids[:, 2:4] = self.centroids_OLD
+
+        # Mean shifting
+        while np.any(np.isclose(centroids[centroids[:, 4] >= 0, 0], centroids[centroids[:, 4] >= 0, 2], atol=0.1, rtol=10e-7)
+                     & np.isclose(centroids[centroids[:, 4] >= 0, 1], centroids[centroids[:, 4] >= 0, 3], atol=0.1, rtol=10e-7) == False):  # noqa
+
+            # Shift new to old (since you can't do a do-while loop in Python)
+            centroids[centroids[:, 4] >= 0, :2] = centroids[centroids[:, 4] >= 0, 2:4]
+            # Set new x, y and counter to zero
+            centroids[centroids[:, 4] >= 0, 2:] = np.zeros([self.centroid_count, 3])
+
+            # Iterate through all the points searching closest centroid
+            for event in self.relevant_points:
+                d_min = self.centroid_range
+                c_min = 0  # Tbh, this is redundant, just avoids PyCharm syntax warning
+                for c in range(centroid_count):
+                    if centroids[c, 4] >= 0:
+                        d = math.sqrt((centroids[c, 0] - event[0]) ** 2 + (centroids[c, 1] - event[1]) ** 2)
+                        # Only care if the centroid is within range of interest
+                        if d < d_min:
+                            d_min = d
+                            c_min = c
+
+                if d_min < self.centroid_range:
+                    centroids[c_min, 2] = centroids[c_min, 2] + event[0]
+                    centroids[c_min, 3] = centroids[c_min, 3] + event[1]
+                    centroids[c_min, 4] = centroids[c_min, 4] + 1
+
+            # Remove centroids with too few points and update centroid count
+            centroids[centroids[:, 4] < self.min_points, 4] = -1
+            self.centroid_count = centroids[centroids[:, 4] >= 0,:].shape[0]
+
+            # Calculate centroid by dividing summed distances by the number of points
+            centroids[centroids[:, 4] >= 0, 2] = centroids[centroids[:, 4] >= 0, 2] / centroids[centroids[:, 4] >= 0, 4]
+            centroids[centroids[:, 4] >= 0, 3] = centroids[centroids[:, 4] >= 0, 3] / centroids[centroids[:, 4] >= 0, 4]
+
+            # Remove centroids too close to the edge
+            centroids[(centroids[:, 2] < 2) | (centroids[:, 2] > self.x_size), 4] = -1
+            centroids[(centroids[:, 3] < 2) | (centroids[:, 3] > self.y_size), 4] = -1
+            self.centroid_count = centroids[centroids[:, 4] >= 0,:].shape[0]
+
+        # Store x,y coordinates and state (points count or -1 for failed centroids)
+        self.centroids_NEW = np.empty([centroids.shape[0], 3])
+        self.centroids_NEW[:, :2] = centroids[:, :2]
+        self.centroids_NEW[:, 2] = centroids[:, 4]
+
+    def findMaxima(self, plot: bool = False, echo: bool = False) -> None:
+        """
+
+
+        :param plot:
+        :param echo:
+        :return:
+        """
+
+        t0 = 0
+        slice_projection = np.zeros([128, 128])
+
+        # Project to xy-plane TODO: Avoid loop?
+        for point in self.relevant_points:
+            slice_projection[point[0], point[1]] = slice_projection[point[0], point[1]] + 1
+
+        projection_convolved = ndi.convolve(slice_projection, self.kernal, mode='constant')
+        # local_max = ndi.maximum_filter(projection_convolved, size=5, mode='constant')
+
+        # define an 8-connected neighborhood
+        neighborhood = ndi.morphology.generate_binary_structure(2, 2)
+
+        if echo:
+            t0 = time()
+
+        # apply the local maximum filter; all pixel of maximal value
+        # in their neighborhood are set to 1
+        local_max = ndi.maximum_filter(projection_convolved, footprint=neighborhood) == projection_convolved
+
+        # we create the mask of the background
+        background = (projection_convolved == 0)
+
+        # erode the background in order to successfully subtract it form local_max, otherwise a line will
+        # appear along the background border (artifact of the local maximum filter)
+        eroded_background = ndi.morphology.binary_erosion(background, structure=neighborhood, border_value=1)
+
+        # we obtain the final mask, containing only peaks, by removing the background from the local_max mask
+        # (xor operation), which are then extracted into a list of their x,y coordinates
+        detected_peaks = local_max ^ eroded_background
+        peak_list = np.where(detected_peaks == True)  # noqa
+
+        # Isolate the first N largest peaks
+        max_list = np.vstack((peak_list[0], peak_list[1], projection_convolved[peak_list[0], peak_list[1]])).T
+        max_list = max_list[max_list[:, 2].argsort()[::-1]]
+        max_list = max_list[(max_list[:,0] > 5) & (max_list[:,0] < self.x_size-5), :]
+        max_list = max_list[(max_list[:,1] > 5) & (max_list[:,1] < self.y_size-5), :]
+        max_list = max_list[:15, :]
+
+        if echo:
+            print("Run time: ", time() - t0)
+
+        if plot:
+
+            fig, ax = plt.subplots(2,2)
+
+            ax[0,0].imshow(slice_projection)
+            ax[0,1].imshow(slice_projection)
+            ax[1,0].imshow(self.kernal)
+            ax[1,1].imshow(projection_convolved)
+
+            ax[0,0].set_title("Projected events")
+            ax[0,1].set_title("Marked maxima")
+            ax[1,0].set_title("Kernal")
+            ax[1,1].set_title("Blurred projection")
+
+            ax[0,0].set_xticks(range(0,129,16))
+            ax[0,1].set_xticks(range(0,129,16))
+            ax[1,0].set_xticks(range(0,9,2))
+            ax[1,1].set_xticks(range(0,129,16))
+
+            ax[0,0].set_yticks(range(0,129,16))
+            ax[0,1].set_yticks(range(0,129,16))
+            ax[1,0].set_yticks(range(0,9,2))
+            ax[1,1].set_yticks(range(0,129,16))
+
+            for n in range(max_list.shape[0]):
+                circ = Circle((max_list[n, 1], max_list[n, 0]), 1, color='r')
+                ax[0,1].add_patch(circ)
+
+            plt.show()
+
+        self.centroids_OLD = max_list[:, :2]
+        self.centroid_count = self.centroids_OLD.shape[0]
+
+    @staticmethod
+    def buildKernal(r: float, sigma: float = 2, plot: bool = False, mode: str = 'Gaussian') -> np.array:
+        """
+        Build an kernal mask to blur the image of events projected on the plane. Recommend parameters are the kwarg
+        defaults and have been chosen experimentally.
+
+        :param r:
+        :param sigma:
+        :param plot:
+        :param mode:
+        :return:
+        """
+
+        if (mode != 'Gaussian') and (mode != 'Uniform'):
+            raise ValueError('Invalid mode! Permissible: "Gaussian" / "Uniform"')
+
+        array_dim = 2 * math.ceil(r) + 1
+        centre = math.ceil(r)
+        kernal_array = np.zeros([array_dim, array_dim])
+
+        kernal_array[centre, centre] = 1
+
+        if mode == 'Gaussian':
+            if plot:
+                fig_MeanShiftKernal, ax_MeanShiftKernal = plt.subplots(2, 2)
+                ax_MeanShiftKernal[0, 0].imshow(ndi.filters.gaussian_filter(kernal_array, sigma=2))
+                ax_MeanShiftKernal[0, 1].imshow(ndi.filters.gaussian_filter(kernal_array, sigma=3))
+                ax_MeanShiftKernal[1, 0].imshow(ndi.filters.gaussian_filter(kernal_array, sigma=4))
+                ax_MeanShiftKernal[1, 1].imshow(ndi.filters.gaussian_filter(kernal_array, sigma=5))
+                plt.show(block=False)
+
+            kernal_array = ndi.filters.gaussian_filter(kernal_array, sigma=sigma)
+
+            return kernal_array
+
+        elif mode == 'Uniform':
+            raise Exception("Not implemented yet")
+
+    def estimateDivergence(self, dt: float = 0.4) -> float:
+        """
+
+        :param dt:
+        :return:
+        """
+
+        container = []
+
+        old_set = self.centroids_OLD[self.centroids_NEW[:, 2] >= 0, :]
+        new_set = self.centroids_NEW[self.centroids_NEW[:, 2] >= 0, :2]
+
+        # Cy
+        for j in range(old_set.shape[0]):
+            for m in range(old_set.shape[0]):
+                if j != m:
+                    dist0 = np.linalg.norm(old_set[j, :] - old_set[m, :])
+                    dist1 = np.linalg.norm(new_set[j, :] - new_set[m, :])
+                    # Add divergence estimate if points aren't too close to each other
+                    if (dist0 > self.x_size*self.centroid_seperation) or (dist1 > self.x_size*self.centroid_seperation):
+                        container.append((1 - dist1 / dist0)/(dt/self.time_dimension))
+
+        if len(container) > 0:
+            return statistics.mean(container)
+        else:
+            return 0
+
+    def updateCentroids(self) -> None:
+        """
+        Updates centroids, for now this means just moving NEW to OLD and reseting NEW to None.
+        :return:
+        """
+        self.centroids_OLD = self.centroids_NEW[self.centroids_NEW[:, 2] >= 0, :2]
+        self.centroids_NEW = None
+
+
+    # TESTSCRIPT
+    @staticmethod
+    def performanceAssesment(save: bool = True, test_points: list = None) -> None:
+
+        if test_points is None:
+            ## Parameter space:
+            test_points = [] # noqa
+            # Vary time
+            test_points.append({'batch_size': 200, 'tau': 200, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4})
+            test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4})
+            test_points.append({'batch_size': 600, 'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4})
+            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.00})
+            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.05})
+            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.15})
+            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.50})
+
+        ## The heavy lifting aka actual calculations
+        # Load in events
+        tar_dir = readinConfig()
+        # event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/constDescent6/eventlist_050.txt"))
+        event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/sineHover2/eventlist.txt"))
+
+        all_results = []
+
+        for itr, test in enumerate(test_points):
+            try:
+                D = []
+
+                delta = test['batch_size']
+                start = 0
+                end = start + delta
+
+                instance_pos = MeanShiftEstimator(128, 128,
+                                                  tau=test['tau'],
+                                                  min_points=test['min_points'],
+                                                  min_features=test['min_features'],
+                                                  r=test['r'],
+                                                  centroid_seperation=test["centroid_seperation"])
+
+                instance_neg = MeanShiftEstimator(128, 128,
+                                                  tau=test['tau'],
+                                                  min_points=test['min_points'],
+                                                  min_features=test['min_features'],
+                                                  r=test['r'],
+                                                  centroid_seperation=test["centroid_seperation"])
+
+                while end < max(event_list[:, 2]):
+                    sub_list = event_list[(start < event_list[:, 2]) & (event_list[:, 2] < end), :]
+                    subset_neg = sub_list[sub_list[:, 3] == -1]
+                    subset_pos = sub_list[sub_list[:, 3] == 1]
+
+                    print(f'Section: {start} to {end}')
+
+                    D.append(0.5*instance_pos.update(subset_pos, end) + 0.5*instance_neg.update(subset_neg, end))
+                    # D.append(instance.update(subset_neg, end/1000))
+
+                    start = end
+                    end = start + delta
+
+                Didx = range(len(D))
+                Didx = [tau * delta for tau in Didx]
+
+                all_results.append((Didx, D))
+
+                if save:
+                    # Save for every test point in case it goes to hell
+                    file_stream = open(tar_dir + f'/frames/sineHover2/' + f'test{itr}.txt', 'w')
+                    file_stream.write(
+                        f'batch_size: {test["batch_size"]}, '
+                        f'tau: {test["tau"]}, '
+                        f'min_points: {test["min_points"]}, '
+                        f'min_features: {test["min_features"]}, '
+                        f'r: {test["r"]}'
+                        f'centroid_seperation: {test["centroid_seperation"]}\n')
+                    for i, d in zip(Didx, D):
+                        file_stream.write(f'{i},{d}\n')
+                    file_stream.close()
+            except Exception as e:
+                print(e)
+
+        ## Plotting:
+        # load trajectory file
+        test_tag = "sineHover2"
+
+        old = os.getcwd()
+        os.chdir(tar_dir)
+        frame_rate = Filehandling.readinFrameRate(test_tag)
+        trajectory = Filehandling.readinFlightTrajectory(test_tag)[:, 2]
+        os.chdir(old)
+
+        trajectory = trajectory[1:trajectory.shape[0]]
+
+        D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
+        D_true = D_true * frame_rate
+        D_idx = np.arange(0, D_true.shape[0])*10
+
+        # Plot
+        fig_perf, ax_line = plt.subplots()
+        ax_line.plot(D_idx, D_true, label=f'Ground truth from trajectory')
+
+        for test, result in zip(test_points, all_results):
+            ax_line.plot(result[0], result[1], label=f'batch_size: {test["batch_size"]}, '
+                                                     f'tau: {test["tau"]}, '
+                                                     f'min_points: {test["min_points"]}, '
+                                                     f'min_features: {test["min_features"]}, '
+                                                     f'r: {test["r"]} '
+                                                     f'centroid seperation: {test["centroid_seperation"]}')
+
+        ax_line.set_title("Effect of varying minimum centroid separation")
+        ax_line.set_ylabel("Divergence [1/s]")
+        ax_line.set_xlabel("Time [s]")
+
+        plt.legend()
         plt.show()
 
 
-# TESTSCRIPT
-def splitLocallyAndFit(data, estimator_instance, plot=False, coor=None, title=""):
-    """TEST SCRIPT: Roughly splits data set into slices along z-axis and performs separate fits on all of them"""
+class MeanShiftEstimator:
+    """
+    This wrapper class really implements factory pattern to avoid changing the underlying MeanShiftSingleEsimator
+    """
 
-    # TODO: If this is still useful, change so it plots/returns its own plots
+    def __init__(self, *args, mode='merge', **kwargs):
+        """
+        Inits one or two instances of MeanShiftSingleEsimator's depending on mode. For *args and **kwargs see docstrings
+        in MeanShiftSingleEsimator.__init__()
 
-    # Length of section along z
-    DELTA = estimator_instance.dt
+        :param mode:
+        :param args:
+        :param kwargs:
+        """
 
-    # Extract mean and state
-    level = np.min(data[:, 2]) + DELTA / 2
-    slice_count = 300
+        if mode == 'merge':
+            self.estimators = (MeanShiftSingleEstimator(*args, **kwargs),)
+        elif mode == 'split':
+            self.estimators = (MeanShiftSingleEstimator(*args, **kwargs), MeanShiftSingleEstimator(*args, **kwargs))
 
-    # Storage for fit results
-    all_fits = []
-
-    if plot:
-        # Plot
-        if coor is None:
-            ax = fig.add_subplot(1, 2, 1, projection='3d')
+        # Error if invalid parameters are given
         else:
-            ax = fig.add_subplot(coor[0], coor[1], coor[2], projection='3d')
-        colors = cm.rainbow(np.linspace(0, 1, slice_count))
+            raise ValueError('Invalid value assigned to parameter: polarity')
 
-    for n in range(slice_count):
+        self.mode = mode
 
-        data_slice = takeSlice(data, level + n * DELTA, DELTA)
+    def __str__(self):
+        """
+        Print out configuration and state of the estimators
+        :return:
+        """
 
-        if data_slice.shape[0] > 2:
-            # Sort the slice, since that is how the data would normally look like
-            data_slice = data_slice[data_slice[:, 2].argsort()]
-            all_fits.append(estimator_instance.update(data_slice))
-            if plot:
-                ax.scatter(data_slice[:, 0], data_slice[:, 1], data_slice[:, 2], color=colors[n, :], s=2)
+        if self.mode == 'merge':
+            return f'MODE: {self.mode}\n\n' + f'== First instance ==\n' + self.estimators[0].__str__()
+        elif self.mode == 'split':
+            rtn = f'MODE: {self.mode}\n\n'
+            rtn = rtn + f'== First instance ==\n' + self.estimators[0].__str__()
+            rtn = rtn + f'\n\n== Second instance ==\n' + self.estimators[1].__str__()
+
+            return rtn
+
+    def update(self, event_batch: np.array, t: float) -> [float, float]:
+        """
+        Analogically to MeanShiftSingleEsimator.update() takes event_batch and current time and passes to relevant case.
+        :param event_batch:
+        :param t:
+        :return:
+        """
+
+        if self.mode == 'merge':
+            return self._mergedUpdate(event_batch, t)
+        elif self.mode == 'split':
+            return self._splitUpdate(event_batch, t)
+
+    def _mergedUpdate(self, event_batch: np.arrya, t: float) -> float:
+        """
+        Simple case of all events tracked together, hence both params passed immdiately to single instance method.
+
+        :param event_batch:
+        :param t:
+        :return:
+        """
+        return self.estimators[0].update(event_batch, t)
+
+    def _splitUpdate(self, event_batch: np.array, t: float, both: bool = False) -> [float, float]:
+        """
+        Case for tracking both polaroties separately. Events in batch are first split by polarity and then passed to
+        approrpiate estimator instance method. Returned values are averaged.
+
+        :param event_batch:
+        :param t:
+        mode='merged' :return: Divergence
+        mode='split'  :return: pos_estimator_Divergence, neg_estimator_Divergence
+        """
+
+        pos_events = event_batch[event_batch[:, 3] == -1]
+        neg_events = event_batch[event_batch[:, 3] == 1]
+
+        Dp = self.estimators[0].update(pos_events, t)
+        Dn = self.estimators[1].update(neg_events, t)
+
+        if both:
+            return Dp, Dn
         else:
-            print("No points to fits, section: ", n)
+            return (Dp + Dn)/2
 
-    all_fits_array = None
+    def centroids(self) -> np.array:
+        """
+        This extracts centroids from the contained estimators. For 'split mode it return 2 arguments
 
-    for sub_list in all_fits:
+        mode='merged' :return: estimator.centroids_OLD
+        mode='split'  :return: pos_estimator.centroids_OLD, neg_estimator.centroids_OLD
+        """
 
-        if len(sub_list) > 0:
-            if all_fits_array is None:
-                all_fits_array = array(sub_list)
-            else:
-                all_fits_array = concatenate((all_fits_array, array(sub_list)))
-            print("")
-
-    ideal = array([2, 3])
-    error = array([0, 0])
-
-    for n in range(all_fits_array.shape[0]):
-        a = all_fits_array[n, 3:5]
-        error = error + square(all_fits_array[n, 3:5] - ideal)
-        print('dx/dt" {}, dy/dt: {}'.format(all_fits_array[n, 3], all_fits_array[n, 4]))
-
-    print('Error {}: {}'.format(estimator_instance.mode, sum(error / all_fits_array.shape[0])))
-
-    if plot:
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-
-        if coor is None:
-            ax = fig.add_subplot(1, 2, 2)
-        else:
-            ax = fig.add_subplot(coor[0], coor[1], coor[2] + 1)
-        ax.quiver(all_fits_array[:, 0], all_fits_array[:, 1], all_fits_array[:, 3], all_fits_array[:, 4])
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_title(title)
+        if self.mode == 'merge':
+            return self.estimators[0].centroids_OLD
+        elif self.mode == 'split':
+            return self.estimators[0].centroids_OLD, self.estimators[1].centroids_OLD
 
 
-# TESTSCRIPT
-def SVDregQuiver(event_list=None, settings=None, plot=False):
-    print("TESTSCRIPT: Running SVDregQuiver...")
+def plotArchivedResults() -> None:
+    """
+    Script for reading in and plotting divergence curves from a performance assessment run.
+    :return:
+    """
 
-    if event_list is None:
-        tar_dir = readinConfig()
-        event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/constDescent6/eventlist_050.txt"))
-        print("Loaded data...")
-    else:
-        print("Data passed in!")
+    plt.rcParams["font.weight"] = "bold"
+    plt.rcParams["axes.labelweight"] = "bold"
 
-    delta = 1000
-    start_at_t0 = 1000
-    start = start_at_t0
-    end = start_at_t0 + delta
-
-    instance = LocalPlaneEstimator('SVDreg', 128, 128, dx=settings['dx'], dt=settings['dt'])
-    print('')
-    print(instance)
-
-    div_estimates = []
-
-    if plot:
-        fig1 = plt.figure()
-
-        ax = fig1.add_subplot(1, 1, 1, projection='3d')
-        ax.set_xlabel('x pixel')
-        ax.set_ylabel('y pixel')
-        ax.set_zlabel('time [ms]')
-
-        ax1 = fig1.add_subplot(1, 1, 1)
-        ax1.set_xlabel('x')
-        ax1.set_ylabel('y')
-        ax1.set_title(f'Vector field on slice between {start / 1000}[s] and {end / 1000}[s]')
-
-    while end < event_list[event_list.shape[0] - 1, 2]:
-        sub_list = event_list[(start < event_list[:, 2]) & (event_list[:, 2] < end), :]
-
-        subset_neg = sub_list[sub_list[:, 3] == -1]
-        subset_pos = sub_list[sub_list[:, 3] == 1]
-
-        # print("Is sorted: ", np.all(True == (np.diff(subset_neg[:, 2]) <= 0)))
-        # print("Is sorted: ", np.all(True == (np.diff(subset_neg[:, 2]) >= 0)))
-
-        vectors = instance.update(subset_neg)
-        vectors = np.array(vectors)
-
-        div_estimates.append(instance.returnDiv())
-
-        # subset_neg = subset_neg[(0 < subset_neg[:, 0]) & (subset_neg[:, 0] < 20)]
-        # subset_neg = subset_neg[(110 < subset_neg[:, 1]) & (subset_neg[:, 1] < 128)]
-
-        if plot:
-            # Clear graphs
-            ax.clear()
-            ax1.clear()
-
-            ax.scatter(subset_neg[:, 0], subset_neg[:, 1], subset_neg[:, 2], s=1)
-            ax1.quiver(vectors[:, 0], vectors[:, 1], vectors[:, 3], vectors[:, 4])
-
-            plt.pause(0.1)
-
-        # Progress to next slice, CANNOT OVER LAP WITH PREVIOUS SLICE
-        start = start + delta
-        end = start + delta
-        print(f'\nNew limits: {start} - {end}')
-
-        # _temp = input("next slice?")
-
-    xIDX = [10*a+start_at_t0/100 for a in range(len(div_estimates))]
-    div_estimates = [d/10000 for d in div_estimates]
-
-    return xIDX, div_estimates
-
-
-# TESTSCRIPT
-def performanceAssessment(save=True):
-
-    ## Parameter space:
-    test_points = []
-    # Vary time
-    test_points.append({'dt': 2000, 'dx': 3, 'min_points': 3, 'th1': 0.0001, 'th2': 0.7})
-    test_points.append({'dt': 5000, 'dx': 3, 'min_points': 3, 'th1': 0.0001, 'th2': 0.7})
-
-    ## The heavy lifting aka actual calculations
-    # Load in events
+    # Directory locations
+    test_tag = "sineHover2"
+    subtest_tag = "/MeanShift_test/best"
     tar_dir = readinConfig()
-    event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/constDescent6/eventlist_050.txt"))
 
-    all_results = []
+    # Load data
+    test_list = os.listdir(tar_dir+'/frames/'+test_tag+subtest_tag)
 
-    for iter, test in enumerate(test_points):
-        try:
-            Didx, D = SVDregQuiver(event_list=event_list, settings=test, plot=False)
+    curve_set = []
+    label_set = []
+    title_str = "<no title>"
 
-            all_results.append((Didx, D))
+    for test in test_list:
+        test_stream = open(tar_dir+'/frames/'+test_tag+subtest_tag+'/'+test)
+        if test == 'title.txt':
+            title_str = test_stream.readline()
+            test_stream.close()
 
-            if save:
-                # Save for every test point in case it goes to hell
-                file_stream = open(tar_dir + f'/frames/constDescent6/' + f'test{iter+5}.txt', 'w')
-                file_stream.write(f'dt: {test["dt"]}, dx: {test["dx"]}, min_points: {test["min_points"]}, th1: {test["th1"]}, th2: {test["th2"]}\n')
-                for i, d in zip(Didx, D):
-                    file_stream.write(f'{i},{d}\n')
-                file_stream.close()
-        except Exception as e:
-            print(e)
+        else:
+            D = []
+            Didx = []
+            label_set.append(test_stream.readline())
 
-    ## Plotting:
+            while True:
+                try:
+                    didx, d = test_stream.readline().split(',')
+                    Didx.append(float(didx))
+                    D.append(float(d))
+                except ValueError:
+                    break
+
+            curve_set.append([Didx, D])
+            test_stream.close()
+
     # load trajectory file
-    test_tag = "constDescent6"
-
     old = os.getcwd()
     os.chdir(tar_dir)
     frame_rate = Filehandling.readinFrameRate(test_tag)
@@ -608,85 +1328,26 @@ def performanceAssessment(save=True):
 
     D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
     D_true = D_true * frame_rate
+    D_idx = np.arange(0,D_true.shape[0])*10
 
     # Plot
     fig_perf, ax_line = plt.subplots()
-    ax_line.plot(range(D_true.shape[0]), D_true)
+    ax_line.plot(D_idx, D_true)
+    for test_label, test_result in zip(label_set, curve_set):
+        ax_line.plot(test_result[0], test_result[1], label=test_label)
 
-    for test, result in zip(test_points, all_results):
-        ax_line.plot(result[0], result[1], label=f'dt: {test["dt"]}, dx: {test["dx"]}, min_points: {test["min_points"]}, th1: {test["th1"]}, th2: {test["th2"]}')
+    ax_line.legend()
+    ax_line.set_title(title_str, fontweight='bold')
+    ax_line.set_ylabel("Divergence [1/s]", fontsize='x-large')
+    ax_line.set_xlabel("Time [ms]", fontsize='x-large')
+    ax_line.set_yticks([-0.12, -0.08, -0.04, 0, 0.04, 0.08, 0.12])
 
     plt.show()
 
 
-# TESTSCRIPT
-def plotLocalPlanesEstimatorPerformanceResults(test_label: str):
-
-    import os
-
-    tar_dir = readinConfig()
-    tar_dir = tar_dir + "/frames/" + test_label + "/LocalPlanes_test/"
-    labels = []
-    data_sets = []
-
-    # Read in data
-    files_list = os.listdir(tar_dir)
-    for file in files_list:
-        stream = open(tar_dir+file, 'r')
-        labels.append(stream.readline())
-        T = []
-        D = []
-        while True:
-            try:
-                t, d = stream.readline().split(',')
-                T.append(float(t))
-                D.append(float(d[:-1]))
-            except ValueError:
-                break
-        data_sets.append([T, D])
-
-    fig, ax = plt.subplots()
-    # plt.show()
-    for l, data in zip(labels, data_sets):
-        ax.plot(data[0], data[1], label=l[:-1])
-
-    # Add ground truth:
-    test_tag = "constDescent6"
-
-    old = os.getcwd()
-    os.chdir(readinConfig())
-    frame_rate = Filehandling.readinFrameRate(test_tag)
-    trajectory = Filehandling.readinFlightTrajectory(test_tag)[:, 2]
-    os.chdir(old)
-
-    trajectory = trajectory[1:trajectory.shape[0]]
-    D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
-    D_true = D_true * frame_rate
-
-    ax.plot(range(D_true.shape[0]), D_true, c=[0, 0, 0], label='Ground truth')
-
-    ax.set_title('Performance of local planes divergence estimator with various parameter settings')
-    ax.legend()
-    plt.show()
-
-
-def takeSlice(data, level, delta):
-    selected_points = []
-    A = level - delta / 2
-    C = level + delta / 2
-
-    for n in range(data.shape[0]):
-        if level - delta / 2 <= data[n, 2] < level + delta / 2:
-            selected_points.append(data[n, :])
-
-    return np.array(selected_points)
-
-
-# This is a quasi-test to verify functionality
 if __name__ == "__main__":
+    pass
 
-    # SVDregQuiver(plot=False)
-    performanceAssessment(save=False)
-
+    plotArchivedResults()
+    # MeanShiftEsimator.performanceAssesment()
     # plotLocalPlanesEstimatorPerformanceResults('constDescent6')
-
