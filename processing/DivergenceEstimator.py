@@ -1,6 +1,7 @@
 import math
 import os
 import statistics
+import traceback
 from time import time
 
 import numpy as np
@@ -678,24 +679,49 @@ class MeanShiftSingleEstimator:
     optic flow estimation of
     """
 
-    # TODO: Using transversely located centroids for estimation
+    max_in_quad = 15
 
     def __init__(self, x_size, y_size,
-                 tau=3000,
+                 tau=600,
                  min_points=15,
                  min_features=5,
                  r=4,
-                 centroid_seperation=0.05,
+                 centroid_seperation=0.4,
                  time_dimension=1000):
+
+        """
+        Stores all settings, inits data containers, generates convolution masks.
+
+        Note: Default values for temporal parameters (tau, time_dimension) assume
+        incoming data is in [ms].
+
+        :param x_size: int
+        :param y_size: int
+            Dimensions of the pixel array
+        :param tau:
+            Duration of memory of past events (how far back are events considered relevant).
+        :param min_points:
+            Min number of points for centroid not to be discarded.
+        :param min_features:
+            Min number of centroids before centroid regen is called.
+        :param r:
+            Radius of
+        :param centroid_seperation:
+            Min distance as fraction of image plane for tracked centroids to be considered for divergence estimatino.
+        :param time_dimension:
+            Normilising factor is t dim is not [s]. E.g. for [ms] time_dimension=1000
+        """
 
         ## STATIC ATTRIBUTES
         # Maxima finding parameters
-        self.min_points = min_points
         self.min_features = min_features
+        self.init_maxima = 15
+        # self.max_in_quad = self.init_maxima
         self.kernal = self.buildKernal(r)
 
         # Mean shift parameters
         self.centroid_range = r
+        self.min_points = min_points
 
         # Divergence estimation parameters
         self.centroid_seperation = centroid_seperation
@@ -749,10 +775,10 @@ class MeanShiftSingleEstimator:
         spc_list = [len(x) for x in dynamic_param_str[7:-2].split(' | ')]
 
         dynamic_value_str = f'Value:' \
-                            f' {self.min_points}{spc(spc_list[0]-len(str(self.min_points)))} |' \
+                            f' {self.previous_call}{spc(spc_list[0]-len(str(self.previous_call)))} |' \
                             f' {len(self.relevant_points)}{spc(spc_list[1]-len(str(len(self.relevant_points))))} |' \
                             f' {self.tau}{spc(spc_list[2]-len(str(self.tau)))} |' \
-                            f' {self.time_dimension}{spc(spc_list[3]-len(str(self.time_dimension)))}'
+                            f' {self.centroid_count}{spc(spc_list[3]-len(str(self.centroid_count)))}'
 
         rtn = rtn + dynamic_HEADER + dynamic_param_str + dynamic_value_str
 
@@ -763,8 +789,11 @@ class MeanShiftSingleEstimator:
         Top level logic of the estimator. Particular phases are broken down into subroutines.
 
         :param time_now:
+            Real time in the simulation at the moment the estimator is called.
         :param event_batch: np.array
+            Events provided by the camera.
         :return D: float
+            Divergence estimate.
         """
 
         self.discardOldEvents(event_batch)
@@ -804,7 +833,9 @@ class MeanShiftSingleEstimator:
         Puts the new batch to container and discards events that are too old.
 
         :param event_batch:
-        :param echo: Toggles on echo to terminal to debug.
+            Events provided by the camera.
+        :param echo:
+            Toggles on echo to terminal to debug.
         :return:
         """
         event_count = 0
@@ -813,7 +844,7 @@ class MeanShiftSingleEstimator:
             self.relevant_points.append(event_batch[n, :])
             event_count += event_batch.shape[0]
 
-        latest_event_time = event_batch[event_batch.shape[0] - 1][2]  # Could be also last from self.relevant_points
+        latest_event_time = self.relevant_points[-1][2]  # Could be also last from self.relevant_points
 
         if echo:
             print("Batch size: ", len(event_batch))
@@ -847,6 +878,9 @@ class MeanShiftSingleEstimator:
         location. Runs interatively through all points until all centroids converge or are discarded as invalid.
         Assigns previous centroids to self.centroids_OLD and new centroids to self.centroids_NEW.
 
+        Details: centroids are stored in numpy array and faield centroids are tagged with clusteredPoints=-1. The array
+        is reformatted in .updateCentroids() method that is called later in .update().
+
         :return:
         """
 
@@ -856,7 +890,8 @@ class MeanShiftSingleEstimator:
         centroids[:, :2] = np.zeros([centroid_count, 1])
         centroids[:, 2:4] = self.centroids_OLD
 
-        # Mean shifting
+        ## MEAN SHIFTING
+        # While loop has to use isclose() cause for floating point numbers they never equal. Atol chosen as 10th of a pixel.
         while np.any(np.isclose(centroids[centroids[:, 4] >= 0, 0], centroids[centroids[:, 4] >= 0, 2], atol=0.1, rtol=10e-7)
                      & np.isclose(centroids[centroids[:, 4] >= 0, 1], centroids[centroids[:, 4] >= 0, 3], atol=0.1, rtol=10e-7) == False):  # noqa
 
@@ -900,19 +935,30 @@ class MeanShiftSingleEstimator:
         self.centroids_NEW[:, :2] = centroids[:, :2]
         self.centroids_NEW[:, 2] = centroids[:, 4]
 
-    def findMaxima(self, plot: bool = False, echo: bool = False) -> None:
+    def findMaxima(self, mode: str = 'quad', plot: bool = False, echo: bool = False) -> None:
         """
+        Sums events along t-axis producing a 2D projection, which is then blurred with a Gaussian mask (self.kernal).
+        The designated maxima are the n largest local maxima of that "landscape".
 
+        # TODO: Kwarg overriding class attribute? Is that even recommended?
+        # TODO: Change to have a self.echo
 
+        :param mode
+            Method of chossing which peaks are selected as tracked features.
+                global -> all features are arranged according to peak even density and the top n are selected, where n
+                          is specified by self.init_maxima
+                quad   -> attempts to distribute the peaks among quadrants in the image plane (#TODO What is the rule?)
         :param plot:
+            Debugging option - will plot the event density map with selected peaks marked.
         :param echo:
+            Debuggin option - echos state to terminal
         :return:
         """
 
         t0 = 0
         slice_projection = np.zeros([128, 128])
 
-        # Project to xy-plane TODO: Avoid loop?
+        # Project to xy-plane
         for point in self.relevant_points:
             slice_projection[point[0], point[1]] = slice_projection[point[0], point[1]] + 1
 
@@ -941,12 +987,74 @@ class MeanShiftSingleEstimator:
         detected_peaks = local_max ^ eroded_background
         peak_list = np.where(detected_peaks == True)  # noqa
 
-        # Isolate the first N largest peaks
+        # Build array of peaks: [x, y, intensity] sorted by intensity
         max_list = np.vstack((peak_list[0], peak_list[1], projection_convolved[peak_list[0], peak_list[1]])).T
         max_list = max_list[max_list[:, 2].argsort()[::-1]]
+        # Discard peaks within 5 pixels from the edge
         max_list = max_list[(max_list[:,0] > 5) & (max_list[:,0] < self.x_size-5), :]
         max_list = max_list[(max_list[:,1] > 5) & (max_list[:,1] < self.y_size-5), :]
-        max_list = max_list[:15, :]
+
+        # Container for selected peaks
+        selected = np.empty([self.init_maxima, 3])
+
+        if mode == 'globally':
+            # Avoids indexing error if there are insufficient available peaks.
+            if max_list.shape[0] < self.init_maxima:
+                if echo:
+                    print(f'Insufficient peaks detected. REQUESTED {self.init_maxima}, DETECTED: {max_list.shape[0]}')
+
+            selected = max_list  # Its passing all through since there aren't enough to be picky
+        elif mode == 'quad':
+            # selected = max_list[:maxima_number, :]
+            # selected_by_quad = [[max_list[:, (max_list[:, 0] > self.x_size / 2) & (max_list[:, 1] < self.y_size / 2)], 0],
+            #                     [max_list[:, (max_list[:, 0] < self.x_size / 2) & (max_list[:, 1] < self.y_size / 2)], 0],
+            #                     [max_list[:, (max_list[:, 0] > self.x_size / 2) & (max_list[:, 1] > self.y_size / 2)], 0],
+            #                     [max_list[:, (max_list[:, 0] < self.x_size / 2) & (max_list[:, 1] > self.y_size / 2)], 0]]
+            #
+            # for idx, x in enumerate(selected_by_quad):
+            #     if x[0] < 1:
+            #         selected_by_quad[idx, 1] = -1
+            #     elif x[0] > 4:
+            #         selected_by_quad[idx, 1] = 1
+            #     else:
+            #         selected_by_quad[idx, 1] = 0
+            #
+            # for idx, x in enumerate(selected_by_quad):
+            #     if x[1] == -1:
+            #
+            #
+            #
+            # max_list_by_quad = [max_list[:, (max_list[:, 0] > self.x_size / 2) & (max_list[:, 1] < self.y_size / 2)],
+            #                     max_list[:, (max_list[:, 0] < self.x_size / 2) & (max_list[:, 1] < self.y_size / 2)],
+            #                     max_list[:, (max_list[:, 0] > self.x_size / 2) & (max_list[:, 1] > self.y_size / 2)],
+            #                     max_list[:, (max_list[:, 0] < self.x_size / 2) & (max_list[:, 1] > self.y_size / 2)]]
+
+            quads = [0, 0, 0, 0,]
+            for n in range(max_list.shape[0]):
+                if (max_list[n, 0] > self.x_size / 2) & (max_list[n, 1] > self.y_size / 2):
+                    location = 0
+                elif (max_list[n, 0] < self.x_size / 2) & (max_list[n, 1] > self.y_size / 2):
+                    location = 1
+                elif (max_list[n, 0] < self.x_size / 2) & (max_list[n, 1] < self.y_size / 2):
+                    location = 2
+                else:
+                    location = 3
+
+                if quads[location] < MeanShiftSingleEstimator.max_in_quad:
+                    quads[location] = quads[location] + 1
+                    selected[sum(location)] = max_list[n,:]
+
+                if sum(quads) == self.init_maxima:
+                    break
+
+            if echo:
+                print(f'Q1: {quads[0]}\n Q2: {quads[1]}\n, Q3: {quads[2]}\n, Q4: {quads[3]}')
+            self.quads = quads
+
+            # Stored in OLD as NEW is only a temporary container between methods in update call. NEW gets reset reset at
+            # the beginning of update() anyway.
+            self.centroids_OLD = selected[:, :2]
+            self.centroid_count = self.centroids_OLD.shape[0]
 
         if echo:
             print("Run time: ", time() - t0)
@@ -981,7 +1089,8 @@ class MeanShiftSingleEstimator:
 
             plt.show()
 
-        self.centroids_OLD = max_list[:, :2]
+        # Stores to old, because .update() begins with
+        self.centroids_OLD = selected[:, :2]
         self.centroid_count = self.centroids_OLD.shape[0]
 
     @staticmethod
@@ -1024,6 +1133,7 @@ class MeanShiftSingleEstimator:
 
     def estimateDivergence(self, dt: float = 0.4) -> float:
         """
+        Estimate divergnece from the expansion between event clusters.
 
         :param dt:
         :return:
@@ -1056,122 +1166,6 @@ class MeanShiftSingleEstimator:
         """
         self.centroids_OLD = self.centroids_NEW[self.centroids_NEW[:, 2] >= 0, :2]
         self.centroids_NEW = None
-
-
-    # TESTSCRIPT
-    @staticmethod
-    def performanceAssesment(save: bool = True, test_points: list = None) -> None:
-
-        if test_points is None:
-            ## Parameter space:
-            test_points = [] # noqa
-            # Vary time
-            test_points.append({'batch_size': 200, 'tau': 200, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4})
-            test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4})
-            test_points.append({'batch_size': 600, 'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4})
-            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.00})
-            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.05})
-            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.15})
-            # test_points.append({'batch_size': 400, 'tau': 400, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.50})
-
-        ## The heavy lifting aka actual calculations
-        # Load in events
-        tar_dir = readinConfig()
-        # event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/constDescent6/eventlist_050.txt"))
-        event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/sineHover2/eventlist.txt"))
-
-        all_results = []
-
-        for itr, test in enumerate(test_points):
-            try:
-                D = []
-
-                delta = test['batch_size']
-                start = 0
-                end = start + delta
-
-                instance_pos = MeanShiftEstimator(128, 128,
-                                                  tau=test['tau'],
-                                                  min_points=test['min_points'],
-                                                  min_features=test['min_features'],
-                                                  r=test['r'],
-                                                  centroid_seperation=test["centroid_seperation"])
-
-                instance_neg = MeanShiftEstimator(128, 128,
-                                                  tau=test['tau'],
-                                                  min_points=test['min_points'],
-                                                  min_features=test['min_features'],
-                                                  r=test['r'],
-                                                  centroid_seperation=test["centroid_seperation"])
-
-                while end < max(event_list[:, 2]):
-                    sub_list = event_list[(start < event_list[:, 2]) & (event_list[:, 2] < end), :]
-                    subset_neg = sub_list[sub_list[:, 3] == -1]
-                    subset_pos = sub_list[sub_list[:, 3] == 1]
-
-                    print(f'Section: {start} to {end}')
-
-                    D.append(0.5*instance_pos.update(subset_pos, end) + 0.5*instance_neg.update(subset_neg, end))
-                    # D.append(instance.update(subset_neg, end/1000))
-
-                    start = end
-                    end = start + delta
-
-                Didx = range(len(D))
-                Didx = [tau * delta for tau in Didx]
-
-                all_results.append((Didx, D))
-
-                if save:
-                    # Save for every test point in case it goes to hell
-                    file_stream = open(tar_dir + f'/frames/sineHover2/' + f'test{itr}.txt', 'w')
-                    file_stream.write(
-                        f'batch_size: {test["batch_size"]}, '
-                        f'tau: {test["tau"]}, '
-                        f'min_points: {test["min_points"]}, '
-                        f'min_features: {test["min_features"]}, '
-                        f'r: {test["r"]}'
-                        f'centroid_seperation: {test["centroid_seperation"]}\n')
-                    for i, d in zip(Didx, D):
-                        file_stream.write(f'{i},{d}\n')
-                    file_stream.close()
-            except Exception as e:
-                print(e)
-
-        ## Plotting:
-        # load trajectory file
-        test_tag = "sineHover2"
-
-        old = os.getcwd()
-        os.chdir(tar_dir)
-        frame_rate = Filehandling.readinFrameRate(test_tag)
-        trajectory = Filehandling.readinFlightTrajectory(test_tag)[:, 2]
-        os.chdir(old)
-
-        trajectory = trajectory[1:trajectory.shape[0]]
-
-        D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
-        D_true = D_true * frame_rate
-        D_idx = np.arange(0, D_true.shape[0])*10
-
-        # Plot
-        fig_perf, ax_line = plt.subplots()
-        ax_line.plot(D_idx, D_true, label=f'Ground truth from trajectory')
-
-        for test, result in zip(test_points, all_results):
-            ax_line.plot(result[0], result[1], label=f'batch_size: {test["batch_size"]}, '
-                                                     f'tau: {test["tau"]}, '
-                                                     f'min_points: {test["min_points"]}, '
-                                                     f'min_features: {test["min_features"]}, '
-                                                     f'r: {test["r"]} '
-                                                     f'centroid seperation: {test["centroid_seperation"]}')
-
-        ax_line.set_title("Effect of varying minimum centroid separation")
-        ax_line.set_ylabel("Divergence [1/s]")
-        ax_line.set_xlabel("Time [s]")
-
-        plt.legend()
-        plt.show()
 
 
 class MeanShiftEstimator:
@@ -1215,20 +1209,20 @@ class MeanShiftEstimator:
 
             return rtn
 
-    def update(self, event_batch: np.array, t: float) -> [float, float]:
+    def update(self, event_batch: np.array, time_now: float) -> [float, float]:
         """
         Analogically to MeanShiftSingleEsimator.update() takes event_batch and current time and passes to relevant case.
         :param event_batch:
-        :param t:
+        :param time_now:
         :return:
         """
 
         if self.mode == 'merge':
-            return self._mergedUpdate(event_batch, t)
+            return self._mergedUpdate(event_batch, time_now)
         elif self.mode == 'split':
-            return self._splitUpdate(event_batch, t)
+            return self._splitUpdate(event_batch, time_now)
 
-    def _mergedUpdate(self, event_batch: np.arrya, t: float) -> float:
+    def _mergedUpdate(self, event_batch: np.array, t: float) -> float:
         """
         Simple case of all events tracked together, hence both params passed immdiately to single instance method.
 
@@ -1273,6 +1267,122 @@ class MeanShiftEstimator:
         elif self.mode == 'split':
             return self.estimators[0].centroids_OLD, self.estimators[1].centroids_OLD
 
+    # TESTSCRIPT
+    @staticmethod
+    def performanceAssesment(save: bool = True, test_points: list = None) -> None:
+
+        if test_points is None:
+            ## Parameter space is split into external parameters (under 'ext' key) and algorithm parameters (under 'object' key).
+            test_points = [] # noqa
+            # Vary time
+            # test_points.append({'ext': {'batch_size': 600, 'max_in_quad': 5},
+            #                     'object': {'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4}})
+            test_points.append({'ext': {'batch_size': 600, 'max_in_quad': 7},
+                                'object': {'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4}})
+            # test_points.append({'ext': {'batch_size': 600, 'max_in_quad': 10},
+            #                     'object': {'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4}})
+            # test_points.append({'ext': {'batch_size': 600, 'max_in_quad': 5},
+            #                     'object': {'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.2}})
+            # test_points.append({'ext': {'batch_size': 600, 'max_in_quad': 7},
+            #                     'object': {'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.2}})
+            # test_points.append({'ext': {'batch_size': 600, 'max_in_quad': 10},
+            #                     'object': {'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.2}})
+
+        ## The heavy lifting aka actual calculations
+        # Load in events
+        tar_dir = readinConfig()
+        event_list = np.array(EventDataHandlers.readEventList(tar_dir + "/frames/sineHover2/eventlist.txt"))
+
+        all_results = []
+        all_labels = []
+
+        for itr, test in enumerate(test_points):
+            try:
+                D = []
+                quads = []
+
+                delta = test['ext']['batch_size']
+                start = 0
+                end = start + delta
+
+                instance = MeanShiftEstimator(128, 128, **test['object'])
+                MeanShiftSingleEstimator.max_in_quad = test['ext']['max_in_quad']
+
+                while end < max(event_list[:, 2]):
+                    event_batch = event_list[(start < event_list[:, 2]) & (event_list[:, 2] < end), :]
+
+                    print(f'Section: {start} to {end}')
+
+                    D.append(instance.update(event_batch, end))
+                    quads.append(instance.estimators[0].quads)
+
+                    start = end
+                    end = start + delta
+
+                Didx = range(len(D))
+                Didx = [tau * delta for tau in Didx]
+
+                all_results.append((Didx, D))
+
+                if save:
+                    # Save for every test point in case it goes to hell
+                    file_stream = open(tar_dir + f'/frames/sineHover2/' + f'test{itr}.txt', 'w')
+                    quad_stream = open(tar_dir + f'/frames/sineHover2/' + f'test{itr}_QUADS.txt', 'w')
+                    # Build string of settings from settings dict
+                    settings_line = f''
+                    for KEY, VALUE in test.items():
+                        settings_line = settings_line + KEY + f': '
+                        for key, value in VALUE.items():
+                            settings_line = settings_line + f'{key}: {value}, '
+
+                    file_stream.write(settings_line)
+                    all_labels.append(settings_line)
+
+                    for i, d in zip(Didx, D):
+                        file_stream.write(f'{i},{d}\n')
+
+                    for x in quads:
+                        quad_stream.write(f'{x[0]},{x[1]},{x[2]},{x[3]}\n')
+
+                    file_stream.close()
+            except Exception as e:
+                print(traceback.format_exc())
+
+        ## Plotting:
+        # load trajectory file
+        test_tag = "sineHover2"
+
+        old = os.getcwd()
+        os.chdir(tar_dir)
+        frame_rate = Filehandling.readinFrameRate(test_tag)
+        trajectory = Filehandling.readinFlightTrajectory(test_tag)[:, 2]
+        os.chdir(old)
+
+        trajectory = trajectory[1:trajectory.shape[0]]
+
+        D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
+        D_true = D_true * frame_rate*10
+        D_idx = np.arange(0, D_true.shape[0])*10
+
+        # Plot
+        fig_perf, ax_line = plt.subplots()
+        ax_line.plot(D_idx, D_true, label=f'Ground truth from trajectory')
+
+        for test, result in zip(test_points, all_results):
+            ax_line.plot(result[0], result[1], label=f'batch_size: {test["ext"]["batch_size"]}, '
+                                                     f'tau: {test["object"]["tau"]}, '
+                                                     f'min_points: {test["object"]["min_points"]}, '
+                                                     f'min_features: {test["object"]["min_features"]}, '
+                                                     f'r: {test["object"]["r"]} '
+                                                     f'centroid seperation: {test["object"]["centroid_seperation"]}')
+
+        ax_line.set_title("Effect of varying minimum centroid separation")
+        ax_line.set_ylabel("Divergence [1/s]")
+        ax_line.set_xlabel("Time [s]")
+
+        plt.legend()
+        plt.show()
+
 
 def plotArchivedResults() -> None:
     """
@@ -1285,7 +1395,9 @@ def plotArchivedResults() -> None:
 
     # Directory locations
     test_tag = "sineHover2"
+    # subtest_tag = "/MeanShift_test/quad_maxima_distributing"
     subtest_tag = "/MeanShift_test/best"
+
     tar_dir = readinConfig()
 
     # Load data
@@ -1348,6 +1460,6 @@ def plotArchivedResults() -> None:
 if __name__ == "__main__":
     pass
 
-    plotArchivedResults()
-    # MeanShiftEsimator.performanceAssesment()
+    # plotArchivedResults()
+    MeanShiftEstimator.performanceAssesment(save=False)
     # plotLocalPlanesEstimatorPerformanceResults('constDescent6')
