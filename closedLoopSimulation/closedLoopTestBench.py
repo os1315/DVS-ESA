@@ -1,4 +1,5 @@
 # External import
+import os
 import pickle
 from time import time
 
@@ -453,12 +454,16 @@ class VerticalcdTTC:
         """
 
         if self.name is None:
-            name = 'test_1'
+            name = 'test'
         else:
             name = self.name
 
-        # TODO: Overwrite prevention
-
+        # Increment name in counter to prevent overwrite.
+        all_files_in_dir = os.listdir('obj')
+        for counter in range(1,1001):
+            if f'{name}_{counter}.pkl' not in all_files_in_dir:
+                name = f'{name}_{counter}'
+                break
         # Place name, settings and results in dict in that order.
         saved_test = {'name': name}
         for key in self.settings:
@@ -467,6 +472,8 @@ class VerticalcdTTC:
 
         with open('obj\\' + saved_test['name'] + '.pkl', 'wb') as f:
             pickle.dump(saved_test, f, pickle.HIGHEST_PROTOCOL)
+
+        print(f'Test saved as obj/{saved_test["name"]}.pkl')
 
     def _overwriteDefaultSettingsWithUserInputs(self, user_settings):
 
