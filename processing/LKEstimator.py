@@ -21,22 +21,23 @@ def chdir(dirname):
     os.chdir(old)
 
 
-def computeFeatureDivergence(old_set, new_set, dt=1):
-    container = []
-
-    for j in range(old_set.shape[0]):
-        for m in range(old_set.shape[0]):
-            if j != m:
-                dist0 = np.linalg.norm(old_set[j, :, :] - old_set[m, :, :])
-                dist1 = np.linalg.norm(new_set[j, :, :] - new_set[m, :, :])
-                container.append(1 - dist1 / dist0)
-
-    return statistics.mean(container) / dt
-
-
 class LKEstimator:
+    """
+    This class is a frame-based diverngence estimator. It uses corner detection functions from OpenCV for Python library
+    to find features for tracking and estimates divergence from their motion on the image plane.
 
-    def __init__(self, old_frame, feature_param, visualise=False, playback_speed=5):
+    Features are not filtered in any way, nor are they balance across the vision plane. Performance is quite poor.
+    """
+
+    def __init__(self, old_frame: np.array, feature_param: dict, visualise: bool = False, playback_speed: float = 5):
+        """
+        Inits the estimator.
+
+        :param old_frame:
+        :param feature_param:
+        :param visualise:
+        :param playback_speed:
+        """
         self.old_frame = old_frame
         self.p0 = cv2.goodFeaturesToTrack(old_frame, mask=None, **feature_param)
 
@@ -54,10 +55,22 @@ class LKEstimator:
             cv2.resizeWindow('image', 600, 600)
 
     def __del__(self):
+        """
+        Destructor will close windows if present.
+
+        :return:
+        """
+
         if self.visualise:
             cv2.destroyAllWindows()
 
-    def update(self, new_frame):
+    def update(self, new_frame: np.array) -> float:
+        """
+        Update of the algorithm, meant to be called upon interation of the environment in the simulation.
+
+        :param new_frame:
+        :return:
+        """
         p1, st, err = cv2.calcOpticalFlowPyrLK(self.old_frame, new_frame, self.p0, None, **lk_params)
 
         if st.size < 10:
@@ -66,9 +79,9 @@ class LKEstimator:
             if self.visualise:
                 print("Redrawing features at step ", n)
                 print("New feature count: ", st.size)
-            DIV = 10 * computeFeatureDivergence(self.p0, p1)
+            DIV = 10 * self.computeFeatureDivergence(self.p0, p1)
         else:
-            DIV = 10 * computeFeatureDivergence(self.p0, p1)
+            DIV = 10 * self.computeFeatureDivergence(self.p0, p1)
 
         # Select good points
         good_new = p1[st == 1]
@@ -94,6 +107,33 @@ class LKEstimator:
 
         return DIV
 
+    @staticmethod
+    def computeFeatureDivergence(old_set: np.array, new_set: np.array, dt: float = 1):
+        """
+        Calculates the divergence from a ratio of average distances between features (corners).
+
+        :param old_set:
+        :param new_set:
+        :param dt:
+        :return:
+        """
+        container = []
+
+        for j in range(old_set.shape[0]):
+            for m in range(old_set.shape[0]):
+                if j != m:
+                    dist0 = np.linalg.norm(old_set[j, :, :] - old_set[m, :, :])
+                    dist1 = np.linalg.norm(new_set[j, :, :] - new_set[m, :, :])
+                    container.append(1 - dist1 / dist0)
+
+        return statistics.mean(container) / dt
+
+
+# Running module as main will run a test that loads a set of images from specified directory and treats them as data
+# obtained in subsequent iterations of a simulated environment. Default is a set of images generated from camera
+# approaching a surface with constant speed.
+
+# If will also load the corresponding trajectory and plot real divergence (velocity/altitude) for reference.
 
 if __name__ == "__main__":
 
@@ -124,7 +164,7 @@ if __name__ == "__main__":
         img2 = img[:, :, 1]
 
     # RUN THE OPTIC FLOW ESTIMATION
-    START = 1   # Don't start at 0, cause that frame may be blank
+    START = 2000  # Don't start at 0, cause that frame may be blank
     first_frame = np.floor(img[:, :, START] * 255).astype(dtype='uint8')
     divergence_estimator = LKEstimator(first_frame, feature_params, visualise_simulation, interval_between_frames)
 
@@ -135,7 +175,7 @@ if __name__ == "__main__":
         next_frame = np.floor(img[:, :, n] * 255).astype(dtype='uint8')
         divergence.append(divergence_estimator.update(next_frame))
 
-    # ACCESS ESTIMATOR PERFORMANCE
+    # ASSESS ESTIMATOR PERFORMANCE
     # load trajectory file
     with chdir(target_dir):
         frame_rate = Filehandling.readinFrameRate(test_tag)
@@ -151,8 +191,8 @@ if __name__ == "__main__":
     divs = []
     for B in bin_size:
         new_divergence = []
-        for idx, D in enumerate(divergence[0:len(divergence)-B]):
-            new_divergence.append(statistics.mean(divergence[idx:idx+B-1]))
+        for idx, D in enumerate(divergence[0:len(divergence) - B]):
+            new_divergence.append(statistics.mean(divergence[idx:idx + B - 1]))
         divs.append(new_divergence)
 
     lines = []
