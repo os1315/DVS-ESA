@@ -359,9 +359,9 @@ class VerticalcdTTC:
                   f'\tstep: {i}\n'
                   f'\tnew events: {len(new_batch)}\n'
                   f'\trun times:\n',
-                  f'\t -> environment: {self.flight_params["calc_time_ctrl"][-1]:.2f}\n',
-                  f'\t -> estimator:   {self.flight_params["calc_time_ctrl"][-1]:.2f}\n',
-                  f'\t -> controller:  {self.flight_params["calc_time_ctrl"][-1]:.2f}\n',
+                  f'\t -> environment: {self.flight_params["calc_time_env"][-1]:.4f}\n',
+                  f'\t -> estimator:   {self.flight_params["calc_time_est"][-1]:.4f}\n',
+                  f'\t -> controller:  {self.flight_params["calc_time_ctrl"][-1]:.4f}\n',
                   f'\tz: {craft.position:.2f}, v: {craft.velocity:.2f}\n')
 
             # Check if landed, else loop will run until it exceeds 1000 iterations.
