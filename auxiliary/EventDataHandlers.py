@@ -3,14 +3,15 @@ import parse
 
 
 def readEventList(str_address: str) -> np.ndarray:
-    """Reads in an event list file and returns a numpy array with the events"""
+    """
+    Reads in an event list file and returns a numpy array with the events.
+    Be careful that the file is not corrupt.
+    """
 
     event_file = open(str_address, 'r')
 
     # First line is not a point
     _str_event = event_file.readline()
-
-    # #TODO: Insert a try except to detect corrupt files (?)
 
     all_packets = []
 
