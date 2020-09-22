@@ -70,10 +70,11 @@ class VerticalLander:
     """
 
     U_MAX = 100_000  # Max thrust
-    Isp = 10_000  # Engine specific impulse
+    Isp = 300  # Engine specific impulse
 
     g = {'Earth': 9.806,
-         'Moon': 1.623}
+         'Moon': 1.623,
+         'Zero': 0}
 
     def __init__(self,
                  init_position: float = 0,
@@ -100,7 +101,7 @@ class VerticalLander:
                 self.velocity = self.velocity - dt * self.g
             else:
                 self.velocity = self.velocity + dt * (u / self.mass - self.g)
-                self.mass = self.mass - dt * u / Lander.Isp  # TODO: What is g0 in the paper?
+                self.mass = self.mass - dt * u / VerticalLander.Isp  # TODO: What is g0 in the paper?
 
             return self.position
 
