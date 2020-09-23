@@ -323,17 +323,17 @@ class VerticalcdTTC:
             new_view = new_view.mean(axis=2)  # Sum the RBG components
             new_batch, _ = converter.update(new_view)
             batches_np = np.array(new_batch)
-            self.flight_params['calc_time_env'].append(time()-start_time)
+            self.flight_params['calc_time_env'].append(time() - start_time)
 
             # Estimator runtime
             start_time = time()
             D = estimator.update(np.array(batches_np), REAL_TIME)
-            self.flight_params['calc_time_est'].append(time()-start_time)
+            self.flight_params['calc_time_est'].append(time() - start_time)
 
             # Controller
             start_time = time()
             u = controller.update(D, dt=dt)
-            self.flight_params['calc_time_ctrl'].append(time()-start_time)
+            self.flight_params['calc_time_ctrl'].append(time() - start_time)
 
             # Store all data
             self.flight_params['time'].append(REAL_TIME)
@@ -460,7 +460,7 @@ class VerticalcdTTC:
 
         # Increment name in counter to prevent overwrite.
         all_files_in_dir = os.listdir('obj')
-        for counter in range(1,1001):
+        for counter in range(1, 1001):
             if f'{name}_{counter}.pkl' not in all_files_in_dir:
                 name = f'{name}_{counter}'
                 break

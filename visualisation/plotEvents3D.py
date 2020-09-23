@@ -50,9 +50,6 @@ subset = data[np.where((data[:, 2] < end) & (data[:, 2] > beg))]
 subset_neg = subset[subset[:, 3] == -1]
 subset_pos = subset[subset[:, 3] == 1]
 
-# Decimation factor
-dec_fac = 2
-
 # Plot
 fig = plt.figure()
 
@@ -68,10 +65,3 @@ ax.set_ylabel('y pixel')
 ax.set_zlabel('time [ms]')
 
 plt.show()
-
-
-# with open(str_address, 'r') as event_file:
-#     str_event = event_file.readline()
-#     print(str_event)
-#     packet = parse.parse("x: {}; y: {}; t: {}; p: {}", str_event)
-#     print(packet)

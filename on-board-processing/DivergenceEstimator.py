@@ -761,11 +761,11 @@ class MeanShiftSingleEstimator:
         spc_list = [len(x) for x in static_param_str[7:-2].split(' | ')]
 
         static_value_str = f'Value:' \
-                           f' {self.previous_call}{spc(spc_list[0]-len(str(self.previous_call)))} |' \
-                           f' {self.min_features}{spc(spc_list[1]-len(str(self.min_features)))} |' \
-                           f' {self.centroid_range}{spc(spc_list[2]-len(str(self.centroid_range)))} |' \
-                           f' {self.centroid_seperation}{spc(spc_list[3]-len(str(self.centroid_seperation)))} |' \
-                           f' {self.time_dimension}{spc(spc_list[4]-len(str(self.time_dimension)))}'
+                           f' {self.previous_call}{spc(spc_list[0] - len(str(self.previous_call)))} |' \
+                           f' {self.min_features}{spc(spc_list[1] - len(str(self.min_features)))} |' \
+                           f' {self.centroid_range}{spc(spc_list[2] - len(str(self.centroid_range)))} |' \
+                           f' {self.centroid_seperation}{spc(spc_list[3] - len(str(self.centroid_seperation)))} |' \
+                           f' {self.time_dimension}{spc(spc_list[4] - len(str(self.time_dimension)))}'
 
         rtn = static_HEADER + static_param_str + static_value_str + '\n\n'
 
@@ -775,10 +775,10 @@ class MeanShiftSingleEstimator:
         spc_list = [len(x) for x in dynamic_param_str[7:-2].split(' | ')]
 
         dynamic_value_str = f'Value:' \
-                            f' {self.previous_call}{spc(spc_list[0]-len(str(self.previous_call)))} |' \
-                            f' {len(self.relevant_points)}{spc(spc_list[1]-len(str(len(self.relevant_points))))} |' \
-                            f' {self.tau}{spc(spc_list[2]-len(str(self.tau)))} |' \
-                            f' {self.centroid_count}{spc(spc_list[3]-len(str(self.centroid_count)))}'
+                            f' {self.previous_call}{spc(spc_list[0] - len(str(self.previous_call)))} |' \
+                            f' {len(self.relevant_points)}{spc(spc_list[1] - len(str(len(self.relevant_points))))} |' \
+                            f' {self.tau}{spc(spc_list[2] - len(str(self.tau)))} |' \
+                            f' {self.centroid_count}{spc(spc_list[3] - len(str(self.centroid_count)))}'
 
         rtn = rtn + dynamic_HEADER + dynamic_param_str + dynamic_value_str
 
@@ -919,7 +919,7 @@ class MeanShiftSingleEstimator:
 
             # Remove centroids with too few points and update centroid count
             centroids[centroids[:, 4] < self.min_points, 4] = -1
-            self.centroid_count = centroids[centroids[:, 4] >= 0,:].shape[0]
+            self.centroid_count = centroids[centroids[:, 4] >= 0, :].shape[0]
 
             # Calculate centroid by dividing summed distances by the number of points
             centroids[centroids[:, 4] >= 0, 2] = centroids[centroids[:, 4] >= 0, 2] / centroids[centroids[:, 4] >= 0, 4]
@@ -928,7 +928,7 @@ class MeanShiftSingleEstimator:
             # Remove centroids too close to the edge
             centroids[(centroids[:, 2] < 2) | (centroids[:, 2] > self.x_size), 4] = -1
             centroids[(centroids[:, 3] < 2) | (centroids[:, 3] > self.y_size), 4] = -1
-            self.centroid_count = centroids[centroids[:, 4] >= 0,:].shape[0]
+            self.centroid_count = centroids[centroids[:, 4] >= 0, :].shape[0]
 
         # Store x,y coordinates and state (points count or -1 for failed centroids)
         self.centroids_NEW = np.empty([centroids.shape[0], 3])
@@ -991,8 +991,8 @@ class MeanShiftSingleEstimator:
         max_list = np.vstack((peak_list[0], peak_list[1], projection_convolved[peak_list[0], peak_list[1]])).T
         max_list = max_list[max_list[:, 2].argsort()[::-1]]
         # Discard peaks within 5 pixels from the edge
-        max_list = max_list[(max_list[:,0] > 5) & (max_list[:,0] < self.x_size-5), :]
-        max_list = max_list[(max_list[:,1] > 5) & (max_list[:,1] < self.y_size-5), :]
+        max_list = max_list[(max_list[:, 0] > 5) & (max_list[:, 0] < self.x_size - 5), :]
+        max_list = max_list[(max_list[:, 1] > 5) & (max_list[:, 1] < self.y_size - 5), :]
 
         # Container for selected peaks
         selected = np.empty([self.init_maxima, 3])
@@ -1029,7 +1029,7 @@ class MeanShiftSingleEstimator:
             #                     max_list[:, (max_list[:, 0] > self.x_size / 2) & (max_list[:, 1] > self.y_size / 2)],
             #                     max_list[:, (max_list[:, 0] < self.x_size / 2) & (max_list[:, 1] > self.y_size / 2)]]
 
-            quads = [0, 0, 0, 0,]
+            quads = [0, 0, 0, 0, ]
             for n in range(max_list.shape[0]):
                 if (max_list[n, 0] > self.x_size / 2) & (max_list[n, 1] > self.y_size / 2):
                     location = 0
@@ -1042,7 +1042,7 @@ class MeanShiftSingleEstimator:
 
                 if quads[location] < MeanShiftSingleEstimator.max_in_quad:
                     quads[location] = quads[location] + 1
-                    selected[sum(location)] = max_list[n,:]
+                    selected[sum(location)] = max_list[n, :]
 
                 if sum(quads) == self.init_maxima:
                     break
@@ -1246,8 +1246,8 @@ class MeanShiftEstimator:
         pos_events = event_batch[event_batch[:, 3] == -1]
         neg_events = event_batch[event_batch[:, 3] == 1]
 
-        Dp = self.estimators[0].update(pos_events, t)
-        Dn = self.estimators[1].update(neg_events, t)
+            Dp = self.estimators[0].update(pos_events, t)
+            Dn = self.estimators[1].update(neg_events, t)
 
         if both:
             return Dp, Dn
@@ -1273,7 +1273,7 @@ class MeanShiftEstimator:
 
         if test_points is None:
             ## Parameter space is split into external parameters (under 'ext' key) and algorithm parameters (under 'object' key).
-            test_points = [] # noqa
+            test_points = []  # noqa
             # Vary time
             # test_points.append({'ext': {'batch_size': 600, 'max_in_quad': 5},
             #                     'object': {'tau': 600, 'min_points': 15, 'min_features': 5, 'r': 4, 'centroid_seperation': 0.4}})
@@ -1361,8 +1361,8 @@ class MeanShiftEstimator:
         trajectory = trajectory[1:trajectory.shape[0]]
 
         D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
-        D_true = D_true * frame_rate*10
-        D_idx = np.arange(0, D_true.shape[0])*10
+        D_true = D_true * frame_rate * 10
+        D_idx = np.arange(0, D_true.shape[0]) * 10
 
         # Plot
         fig_perf, ax_line = plt.subplots()
@@ -1401,14 +1401,14 @@ def plotArchivedResults() -> None:
     tar_dir = readinConfig()
 
     # Load data
-    test_list = os.listdir(tar_dir+'/frames/'+test_tag+subtest_tag)
+    test_list = os.listdir(tar_dir + '/frames/' + test_tag + subtest_tag)
 
     curve_set = []
     label_set = []
     title_str = "<no title>"
 
     for test in test_list:
-        test_stream = open(tar_dir+'/frames/'+test_tag+subtest_tag+'/'+test)
+        test_stream = open(tar_dir + '/frames/' + test_tag + subtest_tag + '/' + test)
         if test == 'title.txt':
             title_str = test_stream.readline()
             test_stream.close()
@@ -1440,7 +1440,7 @@ def plotArchivedResults() -> None:
 
     D_true = 1 - (trajectory[0:trajectory.shape[0] - 1] / trajectory[1:trajectory.shape[0]])
     D_true = D_true * frame_rate
-    D_idx = np.arange(0,D_true.shape[0])*10
+    D_idx = np.arange(0, D_true.shape[0]) * 10
 
     # Plot
     fig_perf, ax_line = plt.subplots()
