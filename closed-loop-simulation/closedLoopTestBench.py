@@ -274,7 +274,7 @@ class VerticalcdTTC:
         craft = craftModels.VerticalLander(**self.settings['physical_state'])
         server = PyPANGU.ServerPANGU(**self.settings['camera_dimensions'])
 
-        server.set_viewpoint_by_degree([0, 0, 1000, 0, -90, 0])
+        server.set_viewpoint_by_degree([0, 0, craft.position, 0, -90, 0])
         init_view = server.get_image()
 
         converter = CI.convInterpolate(**self.settings['converter_settings'], initial_image=init_view.mean(axis=2))
@@ -319,7 +319,7 @@ class VerticalcdTTC:
             self.flight_params['calc_time_est'].append(time() - start_time)
 
             # Filter D
-            measurement_filter.update(D)
+            D = measurement_filter.update(D)
 
             # Controller
             start_time = time()
