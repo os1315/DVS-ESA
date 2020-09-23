@@ -93,10 +93,10 @@ if __name__ == "__main__":
 
     ax2 = fig.add_subplot(3, 1, 2)
     ax2.plot(time, deviation)
-    ax1.set_title("Deviation")
+    ax2.set_title("Deviation")
 
     ax3 = fig.add_subplot(3, 1, 3)
     ax3.plot(time, M)
-    ax1.set_title("Mass")
+    ax3.set_title("Mass")
 
     plt.show()
