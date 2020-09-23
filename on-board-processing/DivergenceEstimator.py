@@ -495,7 +495,8 @@ class MeanShiftSingleEstimator:
 
 class MeanShiftEstimator:
     """
-    This wrapper class really implements factory pattern to avoid changing the underlying MeanShiftSingleEsimator
+    This class really just wraps around MeanShiftSingleEsimator depending on whether user wants to split events by
+    polarity or not.
     """
 
     def __init__(self, *args, mode='merge', **kwargs):
@@ -537,7 +538,7 @@ class MeanShiftEstimator:
     def getStoredEventsProjection(self) -> [np.array, np.array]:
         """
         Projects stored (relevant) events along the time axis on 2D plane and returns the result. Returns one or 2
-        projects dependins on mode of estimator.
+        projects depending on mode of estimator.
 
         mode='merged' :return: np.array
         mode='split'  :return: (np.array, np.array)
@@ -563,7 +564,7 @@ class MeanShiftEstimator:
 
     def _mergedUpdate(self, event_batch: np.array, t: float) -> float:
         """
-        Simple case of all events tracked together, hence both params passed immdiately to single instance method.
+        Method of all events tracked together, hence both params passed immdiately to single instance method.
 
         :param event_batch:
         :param t:
@@ -573,7 +574,7 @@ class MeanShiftEstimator:
 
     def _splitUpdate(self, event_batch: np.array, t: float, both: bool = False) -> [float, float]:
         """
-        Case for tracking both polaroties separately. Events in batch are first split by polarity and then passed to
+        Method for tracking both polaroties separately. Events in batch are first split by polarity and then passed to
         approrpiate estimator instance method. Returned values are averaged.
 
         :param event_batch:
@@ -607,7 +608,7 @@ class MeanShiftEstimator:
             elif Dn is not None:
                 return Dn
             else:
-                return 0
+                return None
 
     def centroids(self) -> np.array:
         """
@@ -814,7 +815,6 @@ def plotArchivedResults() -> None:
 
 
 if __name__ == "__main__":
-    pass
 
     # plotArchivedResults()
     MeanShiftEstimator.performanceAssesment(save=False)
