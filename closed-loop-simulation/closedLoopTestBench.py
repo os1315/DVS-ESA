@@ -12,6 +12,7 @@ import PyPANGU
 import craftModels
 import convInterpolate as CI
 import feedbackController
+import filters
 
 
 class VerticalFreefall:
@@ -150,25 +151,9 @@ class VerticalFreefall:
             flight_params['stored_events'].append((A + B).sum())
             flight_params['incoming_events'].append(batches_np.shape[0])
 
-            # stored_events.cla()
-            # stored_events.imshow(estimator.getStoredEventsProjection())
-            #
-            # ctrds = estimator.centroids()
-            # if ctrds is not None:
-            #     for n in range(ctrds.shape[0]):
-            #         if ctrds[n,0] > 0.5:
-            #             circ = Circle((ctrds[n, 1], ctrds[n, 0]), 1, color='r')
-            #             stored_events.add_patch(circ)
-            #
-            # current_image.imshow(new_view)
-            #
-            # plt.draw()
-            # plt.pause(0.01)
-
             if echo:
                 print(f'z: {self.craft.position:.2f}, '
                       f'v: {self.craft.velocity:.2f}, ')
-            # f'features: \n{estimator.centroids()}')
 
         if save:
             saved_test = {
@@ -301,6 +286,9 @@ class VerticalcdTTC:
                                                                  c=self.settings['controller_settings']['c'],
                                                                  craft=craft))
 
+        controller.integrator = craft.mass * craft.g / controller.Ki  # TODO: Make that adjustable through settings
+        measurement_filter = filters.RollingAverageFilter(5)
+
         # Add controller settings tile once set.
         self.settings['controller_settings']['controller'] = str(controller)
         if hasattr(controller, 'bins'):
@@ -325,10 +313,13 @@ class VerticalcdTTC:
             batches_np = np.array(new_batch)
             self.flight_params['calc_time_env'].append(time() - start_time)
 
-            # Estimator runtime
+            # Estimate runtime while running divergence estimator
             start_time = time()
             D = estimator.update(np.array(batches_np), REAL_TIME)
             self.flight_params['calc_time_est'].append(time() - start_time)
+
+            # Filter D
+            measurement_filter.update(D)
 
             # Controller
             start_time = time()
@@ -503,7 +494,6 @@ class VerticalcdTTC:
 
 
 if __name__ == "__main__":
-
     # test = VerticalFreefall()
     # test.run(save=True, save_filename='test', echo=True)
 
