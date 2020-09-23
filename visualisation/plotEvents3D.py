@@ -8,9 +8,16 @@ import os
 import sys
 import parse
 
-test_tag = "/constDescent6"
+# test_tag = "/constDescent6"
+# str_address = "C:/PANGU/PANGU_5.00/models/lunar_OFlanding/frames" + test_tag + "/eventlist_050.txt"
+# # Decimation factor
+# dec_fac = 2
 
-str_address = "C:/PANGU/PANGU_5.00/models/lunar_OFlanding/frames" + test_tag + "/eventlist_100.txt"
+test_tag = "/sineHover2_ABR"
+str_address = "C:/PANGU/PANGU_5.00/models/lunar_OFlanding/frames" + test_tag + "/eventlist.txt"
+# Decimation factor
+dec_fac = 2
+
 # str_address = "test.txt"
 
 event_file = open(str_address, 'r')
@@ -56,12 +63,9 @@ fig = plt.figure()
 ax = fig.add_subplot(1, 1, 1, projection='3d')
 ax.scatter(subset_neg[::dec_fac, 0], subset_neg[::dec_fac, 1], subset_neg[::dec_fac, 2], s=1)
 
-# ax = fig.add_subplot(1, 2, 2, projection='3d')
-# ax.scatter(subset_pos[::dec_fac, 0], subset_pos[::dec_fac, 1], subset_pos[::dec_fac, 2], s=1)
 
-
-ax.set_xlabel('x pixel')
-ax.set_ylabel('y pixel')
-ax.set_zlabel('time [ms]')
+ax.set_xlabel('pixel x-coordinate', fontsize='x-large', fontweight='bold')
+ax.set_ylabel('pixel y-coordinate', fontsize='x-large', fontweight='bold')
+ax.set_zlabel('time [s]', fontsize='x-large', fontweight='bold')
 
 plt.show()
