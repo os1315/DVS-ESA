@@ -253,7 +253,7 @@ class IdealVerticalcdTTC:
 class VerticalcdTTC:
     """
     Runs a full closed-loop simulation of a vertically constrained landing. Sets up the simulation with a set of
-    defuault hardcoded set of settings which can be overwritten by passing alternetive values at instance call.
+    default hardcoded set of settings which can be overwritten by passing alternetive values at instance call.
     """
 
     setting_label_list = ['name',
@@ -262,9 +262,11 @@ class VerticalcdTTC:
                           'physical_state',
                           'converter_settings',
                           'environment_time',
-                          'controler_settings']
+                          'controler_settings',
+                          'filter_settings',
+                          'note']
 
-    def __init__(self, user_settings: dict = None) -> None:
+    def __init__(self, user_settings: dict = None, echo: bool = True) -> None:
 
         # Init all the settings and manage user inputs
         self._defaultSettingsInit()
@@ -286,8 +288,12 @@ class VerticalcdTTC:
                                                                  c=self.settings['controller_settings']['c'],
                                                                  craft=craft))
 
-        controller.integrator = craft.mass * craft.g / controller.Ki  # TODO: Make that adjustable through settings
-        measurement_filter = filters.RollingAverageFilter(5)
+        if controller.Ki > 0:
+            controller.integrator = craft.mass * craft.g / controller.Ki  # TODO: Make that adjustable through settings
+
+        # Set filter and extract settings so they can be stored later.
+        measurement_filter = self._setFilter(self.settings['filter_settings'])
+        self.settings['filter_settings'].update(measurement_filter.returnSettings())
 
         # Add controller settings tile once set.
         self.settings['controller_settings']['controller'] = str(controller)
@@ -295,11 +301,13 @@ class VerticalcdTTC:
             self.settings['controller_settings']['bins'] = controller.bins
 
         # Run loop
-        dt = self.settings['environment_time']['dt']
+        dt = self.settings['environment']['dt']
         REAL_TIME = 0
         u = 0
 
-        for i in range(1000):
+        i = 0
+
+        while True:
 
             REAL_TIME = REAL_TIME + dt
 
@@ -346,18 +354,34 @@ class VerticalcdTTC:
                 self.flight_params['thrust'].append(u)
 
             # Echo update to terminal
-            print(f' == Time now: {REAL_TIME:.1f}\n'
-                  f'\tstep: {i}\n'
-                  f'\tnew events: {len(new_batch)}\n'
-                  f'\trun times:\n',
-                  f'\t -> environment: {self.flight_params["calc_time_env"][-1]:.4f}\n',
-                  f'\t -> estimator:   {self.flight_params["calc_time_est"][-1]:.4f}\n',
-                  f'\t -> controller:  {self.flight_params["calc_time_ctrl"][-1]:.4f}\n',
-                  f'\tz: {craft.position:.2f}, v: {craft.velocity:.2f}\n')
+            if echo:
+                print(f' == Time now: {REAL_TIME:.1f}\n'
+                      f'\tstep: {i}\n'
+                      f'\tnew events: {len(new_batch)}\n'
+                      f'\trun times:\n',
+                      f'\t -> environment: {self.flight_params["calc_time_env"][-1]:.4f}\n',
+                      f'\t -> estimator:   {self.flight_params["calc_time_est"][-1]:.4f}\n',
+                      f'\t -> controller:  {self.flight_params["calc_time_ctrl"][-1]:.4f}\n',
+                      f'\tz: {craft.position:.2f}, v: {craft.velocity:.2f}\n')
 
             # Check if landed, else loop will run until it exceeds 1000 iterations.
-            if craft.position < 10:
+            i = u + 1
+
+            if i > 4:
+                print(f'Timeout')
+                self.note = self.note + f'\nResult: Timeout'
+                break
+            elif craft.position < self.settings['environment']['target_altitude']:
                 print(f'\nCraft reached ground or crashed')
+                self.note = self.note + f'\nResult: Reached {self.settings["environment"]["target_altitude"]}m'
+                break
+            elif craft.velocity > 0:
+                print(f'\nOscilations reached in terminal landing phase.')
+                self.note = self.note + f'\nResult: Oscilations reached in terminal landing phase. (v>0)'
+                break
+            elif craft.velocity / craft.position < -0.5:
+                print(f'\nExceeded divergence')
+                self.note = self.note + f'\nResult: Exceeded divergence.'
                 break
 
         self._saveResults()
@@ -403,8 +427,20 @@ class VerticalcdTTC:
             'c': 0.5
         }
 
-        environment_time = {
-            'dt': 0.1
+        # filter_settings = {
+        #     'type': 'rolling_average',
+        #     'Q': 5,
+        #     'margin': 0.05
+        # }
+
+        filter_settings = {
+            'type': 'rolling_average',
+            'bins': 5
+        }
+
+        environment = {
+            'dt': 0.1,
+            'target_altitude': 10
         }
 
         # Wrap all those in single dict.
@@ -413,8 +449,9 @@ class VerticalcdTTC:
             'estimator_settings': estimator_settings,
             'physical_state': physical_state,
             'converter_settings': converter_settings,
-            'environment_time': environment_time,
+            'environment': environment,
             'controller_settings': controller_settings,
+            'filter_settings': filter_settings
         }
 
         # Logging
@@ -436,6 +473,7 @@ class VerticalcdTTC:
         }
 
         self.name = None
+        self.note = "<empty>"
 
     def _saveResults(self) -> None:
         """
@@ -455,10 +493,11 @@ class VerticalcdTTC:
             if f'{name}_{counter}.pkl' not in all_files_in_dir:
                 name = f'{name}_{counter}'
                 break
-        # Place name, settings and results in dict in that order.
+        # Place name, settings, note and results in dict in that order.
         saved_test = {'name': name}
         for key in self.settings:
             saved_test[key] = self.settings[key]
+        saved_test['note'] = self.note
         saved_test['flight_params'] = self.flight_params
 
         with open('obj\\' + saved_test['name'] + '.pkl', 'wb') as f:
@@ -489,8 +528,23 @@ class VerticalcdTTC:
 
             elif key == 'name':
                 self.name = user_settings[key]
+            elif key == 'note':
+                self.note = user_settings[key]
             else:
                 raise AttributeError(f'Bad input: \"{key}\". No such settings parameter!')
+
+    def _setFilter(self, filter_settings: dict):
+
+        if filter_settings['type'] == '' or filter_settings['type'] == 'pass':
+            return filters.BaseFilter()
+        elif filter_settings['type'] == 'rolling_average':
+            return filters.RollingAverageFilter(filter_settings['bins'])
+        elif filter_settings['type'] == 'rolling_average_with_margin':
+            return filters.RollingAvgWithMargin(filter_settings['bins'], 0.2)
+        elif filter_settings['type'] == 'Kalman' or filter_settings['type'] == 'kalman':
+            return filters.KalmanFilter(**filter_settings)
+        else:
+            raise ValueError('Unknown filter type requested')
 
 
 if __name__ == "__main__":

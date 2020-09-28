@@ -10,7 +10,7 @@ class VerticalLander:
     """
 
     U_MAX = 100_000  # Max thrust
-    Isp = 300  # Engine specific impulse
+    Isp = 600  # Engine specific impulse
 
     g = {'Earth': 9.806,
          'Moon': 1.623,
@@ -40,6 +40,8 @@ class VerticalLander:
         :param solver:
         :return:
         """
+
+        u = u + self.mass*self.g
 
         if solver:
             raise NotImplementedError

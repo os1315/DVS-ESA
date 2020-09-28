@@ -8,8 +8,10 @@ import matplotlib.pyplot as plt
 # filename = 'P_controller_1'
 # filename = 'Dario_demo_unfilt'
 # filename = 'another_test'
-# filename = 'unfilt_PI_1'
-filename = 'preset_int_PI_3'
+# filename = 'highres_1_Kalman_massaware_10'
+filename = 'highres_1_ravg_massaware_4'
+# filename = 'preset_int_Kalman_4'
+# filename = 'unfilt_P_mass_aware_1'
 
 with open(filename + '.pkl', 'rb') as f:
     my_dict = pickle.load(f)
@@ -18,10 +20,13 @@ with open(filename + '.pkl', 'rb') as f:
 file_name = my_dict['name']
 print(f'\n== File: {file_name} ==')
 for key, item in my_dict.items():
-    if key != 'name' and key != 'flight_params':
+    if key != 'name' and key != 'flight_params' and key != 'note':
         print(f'From tile: {key}')
         for subkey, subitem in item.items():
             print(f'\t{subkey}: {subitem}')
+
+print(f'From tile: note')
+print(f'\t{my_dict["note"]}')
 
 flight_params = my_dict['flight_params']
 

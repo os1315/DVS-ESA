@@ -1,9 +1,25 @@
 from closedLoopTestBench import VerticalcdTTC
 
 settings = [
+    # {
+    #     'name': 'highres_1_Kalman_massaware',
+    #     'controller_settings': {'Kp': 500_000, 'Ki': 100_000},
+    #     'filter_settings': {'type': 'kalman','Q': 0.001},
+    #     'physical_state': {'init_position': 10_000, 'init_velocity': -200}
+    # },
+
+    # {
+    #     'name': 'highres_1_ravg_massaware',
+    #     'controller_settings': {'Kp': 500_000},
+    #     'filter_settings': {'type': 'rolling_average', 'bins': 5},
+    #     'physical_state': {'init_position': 10_000, 'init_velocity': -200}
+    # },
+    #
     {
-        'name': 'preset_int_PI',
-        'controller_settings': {'Kp': 1000_000, 'Ki': 10_000}
+        'name': 'highres_1_ravg_massaware',
+        'controller_settings': {'Kp': 1000_000},
+        'filter_settings': {'type': 'rolling_average', 'bins': 5},
+        'physical_state': {'init_position': 10_000, 'init_velocity': -200}
     }
 ]
 

@@ -142,10 +142,11 @@ class MeanShiftSingleEstimator:
 
         return self._project2plane()
 
-    def update(self, event_batch: np.array, time_now: float) -> float:
+    def update(self, event_batch: np.array, time_now: float, echo: bool = False) -> float:
         """
         Top level logic of the estimator. Particular phases are broken down into subroutines.
 
+        :param echo:
         :param time_now:
             Real time in the simulation at the moment the estimator is called.
         :param event_batch: np.array
@@ -168,18 +169,21 @@ class MeanShiftSingleEstimator:
             if self.centroid_count > self.min_features:
                 D = self._estimateDivergence(dt=time_now - self.previous_call)
                 self._updateCentroids()
-                print("normal")
+                if echo:
+                    print("normal")
                 rtn = D
             # Case that ALL centroids failed to converge, no div can be estimated (hence 0) and new have to be regenerated
             elif self.centroid_count < 1:
                 self.findMaxima()
-                print("no div")
+                if echo:
+                    print("no div")
                 rtn = 0
             # Based on the few centroids left the div can be estimated at this point, but new are regenerated afterwards
             else:
                 D = self._estimateDivergence(dt=time_now - self.previous_call)
                 self.findMaxima()
-                print("regen")
+                if echo:
+                    print("regen")
                 rtn = D
 
         else:
