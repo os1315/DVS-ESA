@@ -1,4 +1,5 @@
 from closedLoopTestBench import VerticalcdTTC
+from closedLoopTestBench import VerticalcD
 
 settings = [
     # {
@@ -16,12 +17,13 @@ settings = [
     # },
     #
     {
-        'name': 'highres_1_ravg_massaware',
-        'controller_settings': {'Kp': 1000_000},
+        'name': 'test',
+        'controller_settings': {'Kp': 4_000_000},
         'filter_settings': {'type': 'rolling_average', 'bins': 5},
         'physical_state': {'init_position': 10_000, 'init_velocity': -200}
     }
 ]
 
 for s in settings:
-    VerticalcdTTC(s)
+    # VerticalcdTTC(s)
+    VerticalcD(s)

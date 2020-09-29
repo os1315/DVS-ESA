@@ -9,9 +9,11 @@ import matplotlib.pyplot as plt
 # filename = 'Dario_demo_unfilt'
 # filename = 'another_test'
 # filename = 'highres_1_Kalman_massaware_10'
-filename = 'highres_1_ravg_massaware_4'
+# filename = 'highres_1_ravg_massaware_11'
 # filename = 'preset_int_Kalman_4'
 # filename = 'unfilt_P_mass_aware_1'
+filename = 'cD_model_1_ravg_massaware_6'
+# filename = 'cdTTC_model_1_ravg_massaware_4'
 
 with open(filename + '.pkl', 'rb') as f:
     my_dict = pickle.load(f)
@@ -25,8 +27,9 @@ for key, item in my_dict.items():
         for subkey, subitem in item.items():
             print(f'\t{subkey}: {subitem}')
 
-print(f'From tile: note')
-print(f'\t{my_dict["note"]}')
+if 'note' in my_dict:
+    print(f'From tile: note')
+    print(f'\t{my_dict["note"]}')
 
 flight_params = my_dict['flight_params']
 

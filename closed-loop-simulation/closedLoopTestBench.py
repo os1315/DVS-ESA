@@ -365,9 +365,9 @@ class VerticalcdTTC:
                       f'\tz: {craft.position:.2f}, v: {craft.velocity:.2f}\n')
 
             # Check if landed, else loop will run until it exceeds 1000 iterations.
-            i = u + 1
+            i = i + 1
 
-            if i > 4:
+            if i > 2000:
                 print(f'Timeout')
                 self.note = self.note + f'\nResult: Timeout'
                 break
@@ -440,7 +440,302 @@ class VerticalcdTTC:
 
         environment = {
             'dt': 0.1,
-            'target_altitude': 10
+            'target_altitude': 50
+        }
+
+        # Wrap all those in single dict.
+        self.settings = {
+            'camera_dimensions': camera_dimensions,
+            'estimator_settings': estimator_settings,
+            'physical_state': physical_state,
+            'converter_settings': converter_settings,
+            'environment': environment,
+            'controller_settings': controller_settings,
+            'filter_settings': filter_settings
+        }
+
+        # Logging
+        self.flight_params = {
+            'time': [],
+            'position': [],
+            'velocity': [],
+            'mass': [],
+            'thrust': [],
+            'D': [],
+            'D_real': [],
+            'tau': [],
+            'tau_target': [],
+            'incoming_events': [],
+            'stored_events': [],
+            'calc_time_env': [],
+            'calc_time_est': [],
+            'calc_time_ctrl': []
+        }
+
+        self.name = None
+        self.note = "<empty>"
+
+    def _saveResults(self) -> None:
+        """
+        Shelves results as a pickled dictionary. Consider other formats for long-term storage and sharing.
+
+        :return:
+        """
+
+        if self.name is None:
+            name = 'test'
+        else:
+            name = self.name
+
+        # Increment name in counter to prevent overwrite.
+        all_files_in_dir = os.listdir('obj')
+        for counter in range(1, 1001):
+            if f'{name}_{counter}.pkl' not in all_files_in_dir:
+                name = f'{name}_{counter}'
+                break
+        # Place name, settings, note and results in dict in that order.
+        saved_test = {'name': name}
+        for key in self.settings:
+            saved_test[key] = self.settings[key]
+        saved_test['note'] = self.note
+        saved_test['flight_params'] = self.flight_params
+
+        with open('obj\\' + saved_test['name'] + '.pkl', 'wb') as f:
+            pickle.dump(saved_test, f, pickle.HIGHEST_PROTOCOL)
+
+        print(f'Test saved as obj/{saved_test["name"]}.pkl')
+
+    def _overwriteDefaultSettingsWithUserInputs(self, user_settings):
+
+        # Nothing provided, return and run with defaults
+        if user_settings is None:
+            return
+
+        # Check user provided dict in format: {'parameter_name': 'paramter_value'}.
+        # Else raise error.
+        if type(user_settings) != dict:
+            raise AttributeError("Incorrect user settings arguments format, expected dict.")
+
+        # Run through provided dict and replace relevant keys, if 'name' replace self.name attribute.
+        for key in user_settings:
+            if key in self.settings:
+
+                for sub_key in user_settings[key]:
+                    if sub_key in self.settings[key]:
+                        self.settings[key][sub_key] = user_settings[key][sub_key]
+                    else:
+                        raise AttributeError(f'Bad input: \"{sub_key}\" under \"{key}\". No such settings parameter!')
+
+            elif key == 'name':
+                self.name = user_settings[key]
+            elif key == 'note':
+                self.note = user_settings[key]
+            else:
+                raise AttributeError(f'Bad input: \"{key}\". No such settings parameter!')
+
+    def _setFilter(self, filter_settings: dict):
+
+        if filter_settings['type'] == '' or filter_settings['type'] == 'pass':
+            return filters.BaseFilter()
+        elif filter_settings['type'] == 'rolling_average':
+            return filters.RollingAverageFilter(filter_settings['bins'])
+        elif filter_settings['type'] == 'rolling_average_with_margin':
+            return filters.RollingAvgWithMargin(filter_settings['bins'], 0.2)
+        elif filter_settings['type'] == 'Kalman' or filter_settings['type'] == 'kalman':
+            return filters.KalmanFilter(**filter_settings)
+        else:
+            raise ValueError('Unknown filter type requested')
+
+
+class VerticalcD:
+    """
+    Runs a full closed-loop simulation of a vertically constrained landing. Sets up the simulation with a set of
+    default hardcoded set of settings which can be overwritten by passing alternetive values at instance call.
+    """
+
+    setting_label_list = ['name',
+                          'camera_dimensions',
+                          'estimator_settings',
+                          'physical_state',
+                          'converter_settings',
+                          'environment_time',
+                          'controler_settings',
+                          'filter_settings',
+                          'note']
+
+    def __init__(self, user_settings: dict = None, echo: bool = True, D_target: float = -0.02) -> None:
+
+        # Init all the settings and manage user inputs
+        self._defaultSettingsInit()
+        self._overwriteDefaultSettingsWithUserInputs(user_settings)
+
+        # Initialise the environment simulation part
+        craft = craftModels.VerticalLander(**self.settings['physical_state'])
+        server = PyPANGU.ServerPANGU(**self.settings['camera_dimensions'])
+
+        server.set_viewpoint_by_degree([0, 0, craft.position, 0, -90, 0])
+        init_view = server.get_image()
+
+        converter = CI.convInterpolate(**self.settings['converter_settings'], initial_image=init_view.mean(axis=2))
+        estimator = DivergenceEstimator.MeanShiftEstimator(**self.settings['camera_dimensions'],
+                                                           **self.settings['estimator_settings'])
+        controller = feedbackController.ConstantDivergence(self.settings['controller_settings']['Kp'],
+                                                            self.settings['controller_settings']['Ki'],
+                                                            D_target)
+
+        if controller.Ki > 0:
+            controller.integrator = craft.mass * craft.g / controller.Ki  # TODO: Make that adjustable through settings
+
+        # Set filter and extract settings so they can be stored later.
+        measurement_filter = self._setFilter(self.settings['filter_settings'])
+        self.settings['filter_settings'].update(measurement_filter.returnSettings())
+
+        # Add controller settings tile once set.
+        self.settings['controller_settings']['controller'] = str(controller)
+        if hasattr(controller, 'bins'):
+            self.settings['controller_settings']['bins'] = controller.bins
+
+        # Run loop
+        dt = self.settings['environment']['dt']
+        REAL_TIME = 0
+        u = 0
+
+        i = 0
+
+        while True:
+
+            REAL_TIME = REAL_TIME + dt
+
+            # Environment simulation
+            start_time = time()
+            craft.update(u, dt)
+            server.set_viewpoint_by_degree(0, 0, craft.position, 0, -90, 0)
+            new_view = server.get_image()
+            new_view = new_view.mean(axis=2)  # Sum the RBG components
+            new_batch, _ = converter.update(new_view)
+            batches_np = np.array(new_batch)
+            self.flight_params['calc_time_env'].append(time() - start_time)
+
+            # Estimate runtime while running divergence estimator
+            start_time = time()
+            D = estimator.update(np.array(batches_np), REAL_TIME)
+            self.flight_params['calc_time_est'].append(time() - start_time)
+
+            # Filter D
+            D = measurement_filter.update(D)
+
+            # Controller
+            start_time = time()
+            u = controller.update(D, dt=dt)
+            self.flight_params['calc_time_ctrl'].append(time() - start_time)
+
+            # Store all data
+            self.flight_params['time'].append(REAL_TIME)
+            self.flight_params['position'].append(craft.position)
+            self.flight_params['velocity'].append(craft.velocity)
+            self.flight_params['mass'].append(craft.mass)
+            self.flight_params['D'].append(D)
+            self.flight_params['D_real'].append(craft.velocity / craft.position)
+            self.flight_params['tau'].append(-craft.position / craft.velocity)
+            self.flight_params['tau_target'].append(controller.target_div)
+            A, B = estimator.getStoredEventsProjection()
+            self.flight_params['stored_events'].append((A + B).sum())
+            self.flight_params['incoming_events'].append(batches_np.shape[0])
+
+            # Actual thrust is never negative, so:
+            if u < 0:
+                self.flight_params['thrust'].append(0)
+            else:
+                self.flight_params['thrust'].append(u)
+
+            # Echo update to terminal
+            if echo:
+                print(f' == Time now: {REAL_TIME:.1f}\n'
+                      f'\tstep: {i}\n'
+                      f'\tnew events: {len(new_batch)}\n'
+                      f'\trun times:\n',
+                      f'\t -> environment: {self.flight_params["calc_time_env"][-1]:.4f}\n',
+                      f'\t -> estimator:   {self.flight_params["calc_time_est"][-1]:.4f}\n',
+                      f'\t -> controller:  {self.flight_params["calc_time_ctrl"][-1]:.4f}\n',
+                      f'\tz: {craft.position:.2f}, v: {craft.velocity:.2f}\n')
+
+            # Check if landed, else loop will run until it exceeds 1000 iterations.
+            i = i + 1
+
+            if i > 2000:
+                print(f'Timeout')
+                self.note = self.note + f'\nResult: Timeout'
+                break
+            elif craft.position < self.settings['environment']['target_altitude']:
+                print(f'\nCraft reached ground or crashed')
+                self.note = self.note + f'\nResult: Reached {self.settings["environment"]["target_altitude"]}m'
+                break
+            elif craft.velocity > 0:
+                print(f'\nOscilations reached in terminal landing phase.')
+                self.note = self.note + f'\nResult: Oscilations reached in terminal landing phase. (v>0)'
+                break
+            elif craft.velocity / craft.position < -0.5:
+                print(f'\nExceeded divergence')
+                self.note = self.note + f'\nResult: Exceeded divergence.'
+                break
+
+        self._saveResults()
+
+    def _defaultSettingsInit(self) -> None:
+        """
+        Inits a set of initials settings of the simulation that will run. These will then be overwritten in the if
+        the user provides alternative values for keys.
+
+        :return:
+        """
+
+        camera_dimensions = {
+            'x_size': 128,
+            'y_size': 128
+        }
+
+        estimator_settings = {
+            'tau': 500,
+            'min_points': 15,
+            'min_features': 3,
+            'r': 4,
+            'centroid_seperation': 0.4,
+            'time_dimension': 1,
+            'mode': 'split'
+        }
+
+        physical_state = {
+            'init_position': 2000,
+            'init_velocity': -50,
+            'body': 'Moon'
+        }
+
+        converter_settings = {
+            'theta': 0.1,
+            'T': 100,
+            'latency': 30
+        }
+
+        controller_settings = {
+            'Kp': 1000_000,
+            'Ki': 0,
+            'c': 0.5
+        }
+
+        # filter_settings = {
+        #     'type': 'rolling_average',
+        #     'Q': 5,
+        #     'margin': 0.05
+        # }
+
+        filter_settings = {
+            'type': 'rolling_average',
+            'bins': 5
+        }
+
+        environment = {
+            'dt': 0.1,
+            'target_altitude': 50
         }
 
         # Wrap all those in single dict.

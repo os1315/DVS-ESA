@@ -79,32 +79,24 @@ class ProportionalIntegral(PID):
         return u
 
     def __str__(self):
-        return f'ProportionalIntegral with {str(self.TTCC)}'
+        return f'ProportionalIntegral (1/D) with {str(self.TTCC)}'
 
 
-class FilteredProportional(PID):
-    """
-    A moving average filter working on top of the Proportional controller.
-    """
+class ConstantDivergence(PID):
 
-    def __init__(self, Kp, ControllerForTTC, bins=1):
-        super().__init__(Kp=Kp)
+    def __init__(self, Kp, Ki, target_div):
+        super().__init__(Kp=Kp, Ki=Ki)
 
-        self.TTCC = ControllerForTTC
-        self.bins = bins
-        self.FIFO = [0 for n in range(bins)]
+        self.target_div = target_div
 
     def update(self, D, dt=1):
+        e = self.target_div - D
 
-        new_FIFO = self.FIFO[1:]
-        new_FIFO.append(D)
-        self.FIFO = new_FIFO
-        e = -1 / self.TTCC.update(dt) - sum(self.FIFO)/self.bins
         u = super().update(e, dt=dt)
         return u
 
     def __str__(self):
-        return f'FilteredProportional with {str(self.TTCC)}'
+        return f'ConstantDivergence {str(self.target_div)}'
 
 
 class cdTTC:
