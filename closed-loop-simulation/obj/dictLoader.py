@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 # filename = 'highres_1_ravg_massaware_11'
 # filename = 'preset_int_Kalman_4'
 # filename = 'unfilt_P_mass_aware_1'
-filename = 'cD_model_1_ravg_massaware_6'
+filename = 'cdTTC_res_ravg_massaware_4'
 # filename = 'cdTTC_model_1_ravg_massaware_4'
 
 with open(filename + '.pkl', 'rb') as f:
