@@ -1,3 +1,6 @@
 [submodule "event-based-vision"]
 	path = event-based-vision
 	url = https://gitlab.com/EuropeanSpaceAgency/event-based-vision.git
+[submodule "pypangu"]
+	path = pypangu
+	url = https://gitlab.com/act_team/pypangu.git
